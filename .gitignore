@@ -1,0 +1,5 @@
+# Local agent tooling / session state — never publish
+.omc/
+
+# OS / editor cruft
+.DS_Store
