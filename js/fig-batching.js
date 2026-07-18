@@ -103,7 +103,12 @@ Figures.register('fig-batching', (container, kit) => {
     ctx.fillStyle = PAL.faint;
     ctx.font = '11px ' + PAL.mono;
     const combined = Math.round(emaOcc * NOMINAL);
-    ctx.fillText('≈' + combined + ' tok/s combined · one user alone: ' + NOMINAL + ' tok/s', left, 32);
+    // long form only if it clears the "now" marker above the plot
+    let sub = '≈' + combined + ' tok/s combined · one user alone: ' + NOMINAL + ' tok/s';
+    if (left + ctx.measureText(sub).width > nowX - ctx.measureText('now').width - 10) {
+      sub = '≈' + combined + ' tok/s combined';
+    }
+    ctx.fillText(sub, left, 32);
 
     // clip to plot area
     ctx.save();
@@ -199,14 +204,17 @@ Figures.register('fig-batching', (container, kit) => {
       ctx.fillText(String(i + 1), left - 6, topBar + (i + 0.5) * rowH + 4);
     }
 
-    // axis: forward-pass numbers every 10 steps
+    // axis: forward-pass numbers every 10 steps (skip any that would
+    // land under the "forward passes" label at the left edge)
+    const axisLabel = 'forward passes →';
+    const axisLabelW = ctx.measureText(axisLabel).width;
     ctx.textAlign = 'center';
     for (let s = Math.ceil(firstS / 10) * 10; s <= lastS; s += 10) {
       const x = xOf(s);
-      if (x > left + 12 && x < w - 14) ctx.fillText(String(s), x, h - 5);
+      if (x > left + axisLabelW + 16 && x < w - 14) ctx.fillText(String(s), x, h - 5);
     }
     ctx.textAlign = 'left';
-    ctx.fillText('forward passes →', left, h - 5);
+    ctx.fillText(axisLabel, left, h - 5);
   }
 
   cv.onResize(draw);

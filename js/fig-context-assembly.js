@@ -4,7 +4,7 @@
    shows its label and token count. The punchline is the near-invisible
    sliver that is your actual new message. */
 Figures.register('fig-context-assembly', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 258 });
+  const cv = kit.makeCanvas(container, { height: 224 });
   const controls = kit.makeControls(container);
 
   const CAP = 200000;

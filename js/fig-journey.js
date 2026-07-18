@@ -30,7 +30,7 @@ Figures.register('fig-journey', (container, kit) => {
 
   let distKm = 1200;
   kit.makeSlider(controls, {
-    label: 'distance: same city ↔ across an ocean',
+    label: 'Distance',
     min: 20, max: 9000, step: 20, value: distKm,
     format: v => v >= 1000 ? (v / 1000).toFixed(1) + 'k km' : Math.round(v) + ' km',
     onInput: v => { distKm = v; draw(); },
@@ -181,7 +181,7 @@ Figures.register('fig-journey', (container, kit) => {
     ctx.fillText(cipherRow2, ix + 10, iy + 58);
     ctx.textAlign = 'right'; ctx.font = '600 10.5px ' + PAL.sans;
     ctx.fillStyle = PAL.green; ctx.fillText('readable', ix + iw - 8, iy + 16);
-    ctx.fillStyle = PAL.bg; ctx.fillRect(ix + iw - 72, iy + 30, 66, 16);
+    ctx.fillStyle = PAL.bg; ctx.fillRect(ix + iw - 72, iy + 30, 72, 16);
     ctx.fillStyle = PAL.red; ctx.fillText('ciphertext', ix + iw - 8, iy + 42);
     ctx.restore();
 
