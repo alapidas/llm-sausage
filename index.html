@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How the Sausage Gets Made — Inside a Claude Code Session</title>
+<meta name="description" content="An interactive explainer of everything that happens when you talk to Claude Code — from your terminal, across the wire, into a datacenter, and through a neural network, one token at a time.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129386;</text></svg>">
+</head>
+<body>
+<article>
+
+<header class="hero">
+  <h1>How the Sausage Gets Made</h1>
+  <p class="subtitle">What actually happens when you talk to Claude&nbsp;Code — from the keystroke in your terminal, across the wire, into a datacenter, and through a neural network, one token at a time.</p>
+  <p class="byline">An interactive explainer · July 2026</p>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#your-terminal">Your terminal</a></li>
+    <li><a href="#the-request">The request</a></li>
+    <li><a href="#into-the-datacenter">Into the datacenter</a></li>
+    <li><a href="#tokens">Tokens</a></li>
+    <li><a href="#the-forward-pass">The forward pass</a></li>
+    <li><a href="#the-way-back">The way back</a></li>
+  </ol>
+</nav>
+
+<section id="your-terminal">
+  <h2>Your Terminal</h2>
+
+  <p>It starts with a sentence. You open a terminal, run <code>claude</code>, and ask
+  for something ordinary&nbsp;&mdash; fix the failing test, rename this function. You press
+  Enter, a spinner turns for a moment, and an answer streams back character by
+  character, as if someone on the other end were typing. It feels like a chat
+  window. It is nothing like a chat window. Between your keystroke and the first
+  character of the reply, your sentence will be folded into a document hundreds of
+  thousands of characters long, serialized into JSON, carried across the internet
+  to a datacenter, sliced into tokens, pushed through layer after layer of matrix
+  arithmetic on GPUs, and turned back into text one small piece at a time. In this
+  article we will follow that one request the whole way there and back. We begin
+  on your own machine, where&nbsp;&mdash; before any AI is involved at all&nbsp;&mdash; a surprising
+  amount is already going on.</p>
+
+  <h3>A program drawing a picture of a prompt</h3>
+
+  <p>The interface that greets you is not the terminal&rsquo;s own prompt. It is a
+  Node.js process that has taken over the window and is drawing a text-mode user
+  interface, somewhat the way a game draws frames. Ordinarily a terminal runs in
+  what Unix calls <em>canonical mode</em>: the operating system collects your
+  keystrokes into a line buffer, handles backspace for you, echoes each character
+  to the screen, and only hands the finished line to the program when you press
+  Enter. An interactive interface cannot work that way&nbsp;&mdash; it wants to react to
+  every keystroke, offer completions, move a selection with the arrow keys. So
+  Claude Code switches the terminal into <em>raw mode</em>. From then on every key
+  you press is delivered to the Node process immediately, as one or a few raw
+  bytes on standard input, and nothing is echoed automatically. If the program did
+  nothing, your typing would be invisible.</p>
+
+  <p>Every character you see is therefore the program rendering, not the terminal
+  echoing. When a byte arrives, the CLI updates its internal state&nbsp;&mdash; the text of
+  your draft message, the cursor position&nbsp;&mdash; and repaints the affected part of the
+  screen by writing ANSI escape sequences to standard output: move the cursor
+  here, switch to this color, erase to the end of the line, write these
+  characters. The blinking block cursor, the border around the input box, the
+  spinner that appears while a request is in flight&nbsp;&mdash; all of it is redrawn, many
+  times a second, through the same output channel your shell uses to print the
+  results of <code>ls</code>. In the demonstration below, a request types itself into a
+  miniature terminal, and the lane underneath tracks each keystroke: the key
+  event, the raw byte handed to the Node process, and a running count of screen
+  redraws. Watch the counter keep climbing after Enter&nbsp;&mdash; even the idle spinner is
+  repaint after repaint.</p>
+
+  <div class="figure" id="fig-terminal"></div>
+
+  <h3>What Enter actually sends</h3>
+
+  <p>When you press Enter, it would be reasonable to assume the CLI sends your
+  sentence to the model. It does&nbsp;&mdash; but your sentence rides along at the very end
+  of something much larger. The API is stateless: between calls, the model
+  retains no memory of your project or your earlier messages. So on every single
+  request, the CLI assembles the full context from scratch. First comes a large
+  <em>system prompt</em>: several thousand words of instructions about how to
+  behave&nbsp;&mdash; how to format answers, when to ask before acting, how to use tools.
+  Then the <em>tool definitions</em>: every tool the model may request&nbsp;&mdash;
+  <code>Bash</code>, <code>Read</code>, <code>Edit</code>, <code>Grep</code>, and more&nbsp;&mdash; each described as a
+  JSON schema, its parameters and their types spelled out in full. Then project
+  memory: files such as <code>CLAUDE.md</code>, notes about how this codebase works.
+  Then the entire conversation so far: every message, every reply, and every tool
+  result&nbsp;&mdash; file contents, command output, search matches&nbsp;&mdash; accumulated over the
+  session. And then, at last, your new message.</p>
+
+  <p>The figure below lays this assembly out as a single horizontal bar: the
+  model&rsquo;s <em>context window</em>, with room for 200,000 tokens. A token is a short
+  chunk of text, roughly three-quarters of an English word; we will meet tokens
+  properly in a later section. Drag the slider to extend the conversation, and
+  hover over or touch each segment to see what it holds. Notice how quickly the
+  history grows&nbsp;&mdash; each turn adds not only what was said but everything the tools
+  returned&nbsp;&mdash; and how comically thin the green sliver of your new message remains
+  throughout.</p>
+
+  <div class="figure" id="fig-context-assembly"></div>
+
+  <p class="note">The segment sizes here are illustrative rather than measured;
+  they change between versions. But the system prompt and tool schemas together
+  typically account for tens of thousands of tokens before you have typed
+  anything at all.</p>
+
+  <h3>An agent, not an oracle</h3>
+
+  <p>There is a second surprise hiding in that bar: the tool results. Where do
+  they come from? The model itself cannot open your files, run your tests, or
+  execute anything at all. It receives text and produces text&nbsp;&mdash; that is the
+  entirety of its powers. What makes Claude Code an <em>agent</em> is the program
+  wrapped around the model. When the model wants to look at
+  <code>auth.spec.ts</code>, it replies not with an answer but with a structured
+  <code>tool_use</code> request&nbsp;&mdash; in effect, &ldquo;please run <code>Read</code> on this path.&rdquo;
+  The CLI checks that request against your permission settings (asking you first
+  when the rules require it), executes the tool locally on your machine, packages
+  the output into a <code>tool_result</code> message, appends it to the conversation,
+  and sends the whole context to the API again. The model, now seeing the file&rsquo;s
+  contents, may ask to run the test suite&nbsp;&mdash; and the cycle repeats.</p>
+
+  <p>In the animation below you can watch this loop turn. A single &ldquo;fix the
+  failing test&rdquo; routinely fans out into half a dozen API calls before the model
+  finally responds with plain prose instead of another tool request. How a
+  finished reply becomes an edit on your disk is a story for the final section;
+  for now it is enough to see the shape of the cycle.</p>
+
+  <div class="figure" id="fig-agent-loop"></div>
+
+  <p>Step back and notice what this architecture implies. Everything the model
+  will ever know about your request is inside that one growing document. It
+  cannot peek at your screen, browse your filesystem in the background, or
+  recall what you asked yesterday. If a fact is not in the context&nbsp;&mdash; placed
+  there by the system prompt, a memory file, or a tool result the model itself
+  asked for&nbsp;&mdash; then for the model it does not exist. There is no hidden channel.
+  The context is the interface.</p>
+
+  <p>At this point the CLI serializes the assembled context into the body of a
+  JSON request addressed to Anthropic&rsquo;s API. In the next section, we follow it
+  out of your machine.</p>
+</section>
+
+<section id="the-request">
+  <h2>The Request</h2>
+
+  <p>By the end of the previous section the CLI had gathered everything the model needs to see and serialized it into a single JSON document. Now that document has to leave your machine. It leaves as one ordinary HTTPS <code>POST</code> to <code>https://api.anthropic.com/v1/messages</code> — the same endpoint every other program that talks to the Claude API uses. There is no private tunnel and no special protocol; it is a web request like the ones your browser makes all day, only with an unusually large body and, as we will see, an unusually long-lived response.</p>
+
+  <p>It is worth dwelling on what the body contains, because the API is stateless: the server keeps no memory of your conversation between calls. Everything the model will know arrives inside this one request. The <code>model</code> field names which model should answer. <code>max_tokens</code> caps how long the reply may grow — a stop condition, not a target. <code>system</code> carries the CLI's standing instructions. <code>messages</code> is the conversation itself, an array that strictly alternates between <code>user</code> and <code>assistant</code> turns; when the model previously asked to run a tool, the tool's output travels back embedded in the next user turn as a <code>tool_result</code> content block, so from the API's point of view even the output of a shell command is just something you said. <code>tools</code> lists every tool the model may request, each described by a JSON Schema so that legal arguments are precisely defined. And <code>stream</code> is set to <code>true</code> — we will come back to that. Alongside the body ride a few headers: <code>x-api-key</code> — or an OAuth bearer token, if you signed in with a subscription — proves who is asking, <code>anthropic-version</code> pins the API's behavior to a known date, and <code>content-type</code> declares the body to be JSON.</p>
+
+  <p>In the figure below you can hover over or tap each highlighted part of an abbreviated request to see what it is for. A real body from a working session would run to hundreds of kilobytes, so the long strings are elided here.</p>
+
+  <div class="figure" id="fig-request-json"></div>
+
+  <h3>Before the first byte</h3>
+
+  <p>Sending a request to <code>api.anthropic.com</code> sounds like a single action, but a name is not an address. First comes DNS: your machine asks a resolver what IP address the name maps to, and the answer is usually not a computer in one particular datacenter but an address belonging to an edge network — infrastructure with points of presence spread around the world, arranged so that the address you get routes to somewhere close to you. With an address in hand, your machine opens a TCP connection: it sends a SYN, the far end answers SYN-ACK, and your machine replies ACK. That single round trip gives both sides agreed-upon sequence numbers, so lost or reordered packets can be detected and repaired later.</p>
+
+  <p>Only now does security enter. In TLS 1.3 your machine sends a ClientHello that already includes its half of a key exchange; the server answers with its own half, a certificate proving it really is <code>api.anthropic.com</code>, and a Finished message — all in one flight. Your machine verifies the certificate, sends its own Finished, and can attach encrypted application data to that very same flight. One round trip, and both ends hold symmetric keys that no eavesdropper can derive. This is the reason your API key, your source code, and the model's reply never cross the internet in readable form. The demonstration below replays the whole exchange as a sequence diagram, with a clock accumulating a plausible 30&nbsp;ms per round trip. Try the toggle: when the CLI reuses a connection it already has open, everything above the final arrow simply disappears.</p>
+
+  <div class="figure" id="fig-tls"></div>
+
+  <p>That toggle matters more than it may seem. An agentic session is not one request; it is a loop — model asks for a tool, CLI runs it, sends the result back, and so on, sometimes dozens of times. The CLI therefore keeps the connection warm with HTTP keep-alive, and every request after the first skips DNS, the TCP handshake, and the TLS handshake entirely, paying only the one-way travel time.</p>
+
+  <h3>Hop by hop</h3>
+
+  <p>The request itself, split into packets, now travels a path you never see: from your laptop to your Wi-Fi router, through your ISP's equipment, across a handful of backbone routers, and into the edge point of presence that your DNS answer pointed at. Each router along the way makes its decision by reading only the IP header — the destination address, a hop counter, a few flags — and forwards the packet on. The payload is TLS ciphertext to every one of these middleboxes; they could copy every byte and learn nothing beyond who is talking to whom, and roughly how much.</p>
+
+  <p>The time this takes has a hard floor: light in optical fiber travels at roughly two thirds of its speed in vacuum, about 200&nbsp;km per millisecond. Crossing a continent therefore costs tens of milliseconds no matter how clever the routing, which is exactly why edge networks try to terminate your connection close to you. In the figure below you can watch a packet make the trip, hover over or tap any node to see what it can read, and drag the slider from same-city to trans-oceanic distances to feel how geography dominates the total.</p>
+
+  <div class="figure" id="fig-journey"></div>
+
+  <p class="note">We drew five hops; a real <code>traceroute</code> typically shows ten to twenty, and the exact machinery fronting <code>api.anthropic.com</code> — which networks announce it, where TLS is terminated — is not public. What we describe here is how large API services are typically fronted; the physics of the trip is the same either way.</p>
+
+  <p>One last detail before we let the packets go. Because the request said <code>stream: true</code>, the response will not be a single document that arrives when the model is done. It will be a long-lived HTTP response carrying server-sent events, and the connection we worked so hard to establish stays open for the entire generation, delivering the reply piece by piece as it is produced. We will unpack that stream in the final section.</p>
+
+  <p>For now the packets have arrived at Anthropic's front door — and a large-scale inference service has to decide, in a few milliseconds, what to do with them.</p>
+</section>
+
+<section id="into-the-datacenter">
+  <h2>Into the Datacenter</h2>
+
+  <p>We left your request as a stream of encrypted packets, addressed to <code>api.anthropic.com</code>, disappearing into the network. Now they arrive. The first machines to touch them are edge servers whose job is mundane but essential: they hold the private keys for the TLS session, so this is where the encryption is finally peeled away and your request becomes readable JSON again — inside Anthropic's infrastructure and nowhere else along the way.</p>
+
+  <p>The decrypted request then meets an <strong>API gateway</strong>. Before any model sees a single byte, the gateway authenticates the API key in the <code>x-api-key</code> header, checks it against rate limits and usage quotas, and validates the JSON body — is the model name real, is <code>max_tokens</code> sane, does the message list parse? Requests that fail any of these checks are turned away right here, with the <code>401</code> or <code>429</code> answered in a few milliseconds without waking a single accelerator. Requests that pass are handed to a load balancer, which picks one backend out of a large fleet of <strong>model servers</strong> — and because each fleet holds one model's weights, a request for Opus and a request for Haiku part ways at this point and travel to different pools of machines.</p>
+
+  <p class="note">One honest caveat before we go further: the exact layout of Anthropic's production stack is not public, and we won't pretend to know it. Everything in this section describes how large-scale LLM inference services are generally built — the standard, well-documented machinery of the field. The real system surely differs in details, but these are the mechanisms any service at this scale relies on.</p>
+
+  <p>In the demonstration below, you can watch this front door at work. Requests stream in from the left as colored dots, pause briefly at the gateway while their credentials are checked — the occasional red one is bounced for a bad key or an exceeded rate limit — and the survivors are routed to whichever server has capacity to spare. Your own request is the orange dot. Drag the slider to raise the incoming rate and watch the load bars respond.</p>
+
+  <div class="figure" id="fig-loadbalancer"></div>
+
+  <h3>A model too big for one chip</h3>
+
+  <p>Why does the request need a special "model server" at all, rather than any machine in the building? Because a frontier model is mostly one enormous block of numbers: its weights run to hundreds of gigabytes, far more than any single GPU or accelerator can hold. So the model is <strong>sharded</strong> — sliced across a group of accelerators wired together with very fast interconnects, and that whole group acts as one logical server. When we drew a single box labeled "model server" above, the box really contains several chips, each holding its slice of the weights, and every single token generated for you involves all of them working in concert.</p>
+
+  <p>Those weights were loaded once, when the server started, and they stay resident in accelerator memory permanently. This inverts the usual picture of a web service, where data is fetched to wherever the code runs. Here the model is far too heavy to move, so it never does: your few kilobytes of request travel to the weights, flow through them, and leave. The weights are the factory; your request is the workpiece.</p>
+
+  <h3>Sharing the assembly line</h3>
+
+  <p>Here is the fact that shapes everything about how these servers are run: an accelerator performs the arithmetic for one generation step so quickly that serving a single user would leave it idle almost all the time. The expensive part of each step is streaming those hundreds of gigabytes of weights through the compute units — and having streamed them, the chip can apply them to one request or to dozens for nearly the same cost. So serving systems <strong>batch</strong>: many strangers' requests ride through the very same forward passes, sharing each read of the weights.</p>
+
+  <p>The refinement that makes this practical is called <strong>continuous batching</strong>. Requests don't wait for a full busload to assemble; they join and leave the batch at the granularity of a single token. The moment one request finishes and frees its slot, another slides in mid-stream, and the assembly line never pauses. The figure below shows one server's batch as a timeline: each row is a slot, each column one forward pass, and each rounded bar one request — a short bright chunk when its prompt is absorbed, then one small cell per generated token. Yours is again in orange. Raise the arrival rate and watch the occupancy and the combined token rate climb.</p>
+
+  <div class="figure" id="fig-batching"></div>
+
+  <p>Notice what the readout implies: the server's total output grows almost linearly with occupancy, while each individual request still gets a token on every pass. This is why batching is universal — it multiplies the useful work per pass without slowing any one user down much. You have almost certainly never noticed the strangers sharing your forward passes, and that is the point.</p>
+
+  <h3>Prefill and decode</h3>
+
+  <p>Within each request, the work splits into two very different phases, and the split explains something you have felt every time you use Claude. First comes <strong>prefill</strong>: the entire prompt — every token of it — is pushed through the model in one massively parallel pass, because all the prompt's tokens are already known and can be processed at once. This phase is limited by raw arithmetic, and its duration is your <em>time to first token</em>. Then comes <strong>decode</strong>: tokens are generated one at a time, each requiring its own complete pass through every layer, each pass limited not by arithmetic but by how fast the weights can be streamed from memory. That per-pass time sets your tokens-per-second. One big gulp, then many small sips — that is the pause-then-stream rhythm you know. In the demonstration below, you can replay both phases in slow motion, and lengthen the prompt to see the first-token wait grow while the decode rate stays flat.</p>
+
+  <div class="figure" id="fig-prefill-decode"></div>
+
+  <p>Prefill is also where a well-known optimization lives. If the beginning of your prompt is identical to one the server processed moments ago — and in an agent loop it almost always is, since every iteration resends the same system prompt, tool definitions, and conversation so far — the service can keep the computed internal state of that prefix and skip re-prefilling it. This is <strong>prompt caching</strong>, and it is not speculation: it is a documented feature of Anthropic's API, which is exactly why Claude Code marks the stable prefixes of its requests as cacheable. It is the difference between an agent loop that re-reads the whole transcript from scratch on every turn and one that only pays for what's new.</p>
+
+  <p>There is one thing we have quietly glossed over. We keep saying the model processes "tokens," but your request is still text — bytes of UTF-8. Before the first layer of the model can touch it, that text has to become numbers. How that happens is our next stop.</p>
+</section>
+
+<section id="tokens">
+  <h2>Tokens</h2>
+
+  <p>The request has cleared the routing layers and reached a machine that holds the model's weights. What it carries is still just text — your prompt, the conversation so far, the tool definitions, all of it one long string of bytes. A neural network cannot do anything with a string of bytes directly. It computes with numbers, so before anything else happens the text is translated: it is cut into <em>tokens</em>, and each token is exchanged for an integer.</p>
+
+  <p>A token is not a character, and it is not quite a word. It is an entry in a fixed vocabulary of text fragments — modern models use vocabularies on the order of a hundred thousand entries or more. Common words are single tokens. So are common prefixes and endings, frequent letter pairs, punctuation runs, and — perhaps surprisingly — words with a leading space attached: <code>the</code> and <code>␣the</code> are two different entries, because inside running text a word almost always arrives with the space that precedes it. Rare words don't get an entry of their own; they are assembled from several smaller pieces. In the demonstration below you can type any text and watch it split. Each colored pill is one token, with its integer id underneath, and the <code>␣</code> marks show where a space belongs to the token itself:</p>
+
+  <div class="figure" id="fig-tokenizer"></div>
+
+  <p>A few things are worth noticing as you play with it. The code preset tokenizes remarkably economically: <code>function</code>, <code>return</code>, a run of indentation, the <code>();</code> at the end of a call — each is a single token, because tokenizers are trained on enormous amounts of source code and these sequences occur constantly. A long rare word shatters into many small fragments. Numbers shatter too, often digit by digit, which is one honest reason arithmetic is not a model's most natural skill. And the emoji becomes raw bytes: the vocabulary always keeps the 256 individual byte values as a floor, so any input whatsoever — any language, any binary junk — can be represented. There is no such thing as an unknown word, only a word that costs more tokens.</p>
+
+  <h3>Where the vocabulary comes from</h3>
+
+  <p>Nobody sits down and chooses those hundred thousand fragments by hand. They are learned, with a procedure called <em>byte-pair encoding</em> that is almost embarrassingly simple. Start with a vocabulary of just the 256 possible bytes, so every text is a long sequence of single-byte tokens. Now scan a huge corpus of text and find the pair of adjacent tokens that occurs most often — in English that is something like <code>t</code> followed by <code>h</code>. Fuse that pair into a new token, add it to the vocabulary, and rewrite the corpus using it. Then repeat: find the most frequent adjacent pair in the rewritten corpus, fuse it, repeat again, on the order of a hundred thousand times. Frequent sequences condense into single tokens early; rare ones never do. In the demonstration below you can watch this play out on a tiny corpus, one merge at a time — notice how quickly <code>th</code>, <code>the</code>, and then <code>␣the</code> with its leading space crystallize out of the character soup:</p>
+
+  <div class="figure" id="fig-bpe-merge"></div>
+
+  <p>This training history is exactly why tokenization has the texture you saw in the first demonstration. The merges are ranked by frequency, and encoding new text just replays them in order, so whatever was common in the training corpus is cheap forever after. It also explains the sharp edges. <code>Hello</code> and <code>␣hello</code> are unrelated entries, so capitalization and spacing genuinely change what the model receives. Your API bill and the context window are both measured in tokens, so the same program is cheaper to send than the same number of characters of, say, transliterated Klingon. And when you ask a model how many letters are in a word, you are asking about characters it never actually saw — it received one or two opaque ids, and any spelling knowledge it has was absorbed indirectly during training rather than read off the input.</p>
+
+  <h3>From ids to vectors</h3>
+
+  <p>So the tokenizer hands the model a list of integers. An integer, though, is a barren thing: id 4,072 is not "more similar" to id 4,073 than to id 90,000. The very first thing the model proper does is exchange each id for something far richer. It holds a giant table — the <em>embedding matrix</em> — with one row per vocabulary entry, and each row is a vector of thousands of numbers. Looking up a token is nothing more than reading row <code>id</code> of that table. Everything the model can be said to know about a token in isolation lives in that vector, and the knowledge is encoded geometrically: tokens with related meanings sit near each other, and consistent directions in the space capture consistent relationships. Nobody designed this arrangement. During training the model is endlessly graded on predicting the next token, and nudging related tokens toward similar vectors happens to make those predictions better, so the geometry simply emerges. In the demonstration below you can tap the words on the map to select a token and inspect a schematic slice of its vector — notice how the neighborhoods organize themselves, and how nearby words have similar-looking columns of values:</p>
+
+  <div class="figure" id="fig-embedding"></div>
+
+  <p class="note">Anthropic does not publish the production tokenizer used by its models, so the tokenizations in this section come from a small illustrative byte-pair tokenizer with a few hundred merges built for these figures. The behavior it exhibits — greedy merges, whitespace sensitivity, rare words shattering, bytes as a fallback — is faithful to how real tokenizers work, but the exact token boundaries and ids will differ from what the real vocabulary produces.</p>
+
+  <p>Your entire request is now a sequence of vectors, thousands of numbers per token, lined up in order. That sequence is the actual input to the transformer, and pushing it through — the forward pass — is where we go next.</p>
+</section>
+
+<section id="the-forward-pass">
+  <h2>The Forward Pass</h2>
+
+  <p>Your prompt is now a stack of vectors — one per token, each a list of a few thousand numbers. What receives them is surprisingly repetitive in shape. A transformer is a tall pile of identical layers, typically some dozens of them, and every layer contains the same two sublayers. The first is <strong>attention</strong>, the only place where tokens exchange information with one another. The second is a small feed-forward network — an <strong>MLP</strong> — which transforms each token's vector on its own, paying no attention to its neighbors. That is essentially the entire architecture, applied over and over.</p>
+
+  <p>The way the layers connect matters as much as what they compute. Each token's vector flows upward through the stack along what is called the <strong>residual stream</strong>. A sublayer does not replace the vector; it reads it, computes a small correction, and adds that correction back in. The vector that leaves the top of the stack is the original embedding plus dozens of accumulated refinements — a running draft that gets annotated on every floor but never rewritten from scratch. In the figure below you can watch three tokens ride their residual streams through a small eight-layer stack; the slider chooses which token to follow, and as its vector passes each sublayer you can see the side branch that reads it and merges a contribution back in with a small addition:</p>
+
+  <div class="figure" id="fig-residual"></div>
+
+  <p>Every token in your context makes this trip at the same time — the layers process all positions in parallel, a large part of why GPUs suit this work. And while the layers are identical in shape, each has its own learned weights, so each adds a different kind of refinement to the stream.</p>
+
+  <h3>Attention</h3>
+
+  <p>Attention deserves a closer look, because it is where the reading actually happens. The mechanism is simpler than its reputation. From its current vector, each token computes three new vectors by multiplying against three learned matrices: a <strong>query</strong> — roughly, "here is what I am looking for" — a <strong>key</strong> — "here is what I contain" — and a <strong>value</strong> — "here is what I will hand over if asked." A token's query is compared against the key of every token before it, one dot product per pair. The scores pass through a softmax, which turns them into positive weights summing to one, and the token then pulls in a mixture of the other tokens' values in exactly those proportions — heavily from tokens whose keys matched its query, faintly from everyone else. That weighted mixture is the correction added to its residual stream.</p>
+
+  <p>Two details complete the picture. First, causality: a token may only attend backward, to positions that come before it, never forward — the future is masked out. Second, each layer runs many of these operations side by side, in separate <strong>heads</strong>, each with its own query, key, and value matrices, and each free to learn its own notion of what is relevant to what. In the demonstration below, hover over or tap any word of the sentence to see where it directs its attention under three hand-made heads, and use the buttons to switch between them:</p>
+
+  <div class="figure" id="fig-attention"></div>
+
+  <p>The weights in this figure are invented for illustration, but the patterns they imitate are routinely found in trained models: heads that simply attend to the previous word, heads that track grammatical structure, heads that resolve references. Notice what the coreference head does with "it" — most of its weight lands on "test". Nothing in the model knows what a pronoun is, and no rule about anaphora is written down anywhere; the behavior is just dot products between learned vectors that happened, during training, to make next-token prediction easier. Multiply this by dozens of heads and dozens of layers, and "reading your prompt" dissolves into these little vector comparisons repeated tens of thousands of times. When Claude Code appears to find the failing function in the file you pasted, no name is ever looked up — it is all this.</p>
+
+  <h3>One distribution</h3>
+
+  <p>At the top of the stack, one more multiplication. The final vector of the <em>last</em> token is projected against the <strong>unembedding</strong> — a matrix with one row per entry in the vocabulary — producing one score per token: the <strong>logits</strong>. A last softmax converts them into probabilities. It is worth pausing on the asymmetry here. A machine with billions of parameters has just run end to end across your whole context, and everything it bought is exactly one thing: a probability distribution over the next token. Not an answer, not a sentence. One distribution.</p>
+
+  <p>Something still has to turn that distribution into a choice. Always taking the single most likely token — greedy decoding — sounds sensible but produces stilted, repetitive text that easily falls into loops. Instead, the next token is <em>sampled</em> at random from the distribution, after reshaping it with a <strong>temperature</strong>: the logits are divided by <code>T</code> before the softmax. As <code>T</code> approaches zero the distribution sharpens toward the deterministic favorite; as it grows the distribution flattens toward noise. A companion trick, <strong>top-p</strong>, discards the long tail of barely-plausible tokens before sampling. The figure below runs the real softmax arithmetic on a set of hand-designed logits — drag the temperature slider to reshape the bars, then press Sample to watch a random draw land on the cumulative bar and pick the next token:</p>
+
+  <div class="figure" id="fig-sampling"></div>
+
+  <p>One token is chosen and appended to the sequence — and then the entire forward pass runs again on the slightly longer context to buy the next distribution. Every visible word of a model's reply is produced this way, one pass and one token at a time.</p>
+
+  <h3>The KV cache</h3>
+
+  <p>"Runs again" should worry you. To produce token <code>N + 1</code>, attention needs the keys and values of all <code>N</code> earlier tokens — and computed naively, every step would recompute all of them, even though they depend only on the unchanged prefix and come out identical every time. So they are computed once and kept: every token's keys and values, for every layer and head, are stored in accelerator memory as the <strong>KV cache</strong>. Each new step computes a query, key, and value only for the newest token, attends over the cached keys and values of everything before it, and appends its own K and V to the cache.</p>
+
+  <p>This one optimization shapes the economics of everything you feel as a user. The cache is large — for a big model, a few hundred kilobytes per token, so a long agent session's context runs to gigabytes — and it must be streamed out of memory on every single step, which is why generating tokens is limited by memory bandwidth rather than arithmetic, and why long contexts respond more slowly and cost more. It is also precisely the thing that prompt caching, which we met in the datacenter section, preserves between the calls of the agent loop: the conversation's keys and values stay warm so the next request need not rebuild them. In the figure below you can watch the cache grow one column per step — and flip the toggle to see what the naive world without it would recompute:</p>
+
+  <div class="figure" id="fig-kvcache"></div>
+
+  <p class="note">Production models refine this picture in ways we are skipping: grouped-query attention shares keys and values across heads to shrink the cache, mixture-of-experts layers route each token to a small subset of the MLP weights, and speculative decoding drafts several tokens cheaply and verifies them in a single pass. None of it changes the shape of the story told here.</p>
+
+  <p>Either way, at the end of the pass there now exists a token id that did not exist a moment ago — and it has to make its way back out of the datacenter to your terminal.</p>
+</section>
+
+<section id="the-way-back">
+  <h2>The Way Back</h2>
+
+  <p>The model has committed to a token. Right now it is nothing but an integer in accelerator memory — say, id <code>8543</code> — chosen by the sampler at the end of a forward pass. For that number to become a flicker of text in your terminal, it has to make the entire journey of this article in reverse, and it starts immediately. The serving stack does not wait for a sentence, or even a word, to finish. The id is looked up in the tokenizer's vocabulary, mapped back to its bytes — perhaps <code>Fix</code> — and pushed onto the HTTPS connection that has been sitting open this whole time. This is the connection the CLI asked for back when it set <code>"stream": true</code> in the request body: instead of one response, the server answers with <code>Content-Type: text/event-stream</code> and keeps the socket alive, trickling the reply out as <em>server-sent events</em>, one small encrypted chunk at a time, back through the same TLS tunnel the request came in on.</p>
+
+  <p>The stream has a fixed grammar. First comes a <code>message_start</code> event carrying the shell of the reply — its id, the model name, and how many input tokens the prompt consumed. Then, for each block of content, a <code>content_block_start</code>, followed by many <code>content_block_delta</code> events, each holding a small fragment of text. A fragment usually corresponds to a token or a handful of them; on the wire it is just a couple of lines:</p>
+
+  <pre><code>event: content_block_delta
+data: {"type":"content_block_delta","index":0,
+       "delta":{"type":"text_delta","text":"Fix"}}</code></pre>
+
+  <p>When a block ends, a <code>content_block_stop</code> follows, then a <code>message_delta</code> with the <code>stop_reason</code> and the final token counts, and finally <code>message_stop</code>. The typewriter effect you see in the terminal is not an animation that some frontend engineer tuned to feel pleasant. It is the actual cadence of generation reaching you: each delta exists because, tens of milliseconds ago, one more decode iteration completed in a datacenter, and the result was shipped to you before the next one was even sampled. In the demonstration below, you can watch the event frames come down the wire on the left while Claude Code, on the right, accumulates their fragments into visible text. The slider changes the pace, and the button replays the stream from the top.</p>
+
+  <div class="figure" id="fig-sse"></div>
+
+  <p>On your machine, the loop from the first section now runs in reverse. There, keystrokes became bytes, bytes became JSON, JSON became a request. Here, the CLI reads each event off the socket as it arrives, parses the little JSON payload, appends the fragment to its buffer, and re-renders the reply — markdown parsed live, headings and code blocks colored with the same ANSI escape sequences we met at the very beginning — dozens of times per response, once per repaint, so the text appears to grow under a blinking cursor.</p>
+
+  <h3>Closing the loop</h3>
+
+  <p>Very often, though, the stream does not end in prose. Instead of a text block, the model opens a <code>content_block_start</code> of type <code>tool_use</code>, naming a tool — <code>Read</code>, say — and then streams the tool's JSON input in <code>input_json_delta</code> fragments. It is worth pausing on this: the arguments to the tool call are themselves generated token by token, a JSON string assembled through the same forward passes as any sentence, and streamed back with the same event grammar. The stream then closes with <code>stop_reason: "tool_use"</code>, and on the server, nothing further happens. The model holds no thread of execution, no pending callback. The CLI is now holding the ball.</p>
+
+  <p>What happens next happens entirely on your machine. Claude Code shows you the permission prompt; you press <code>y</code>; the CLI spawns a real process — opens the file, runs the command — against your actual disk. The model never touched it and never could; it only ever emitted text describing what it wanted. The CLI wraps the outcome in a <code>tool_result</code> block, appends it to the conversation, and sends the whole grown context off in a fresh <code>POST</code>. And with that, everything in this article happens again: the TLS handshake (skipped — the connection is still warm), the trip through the internet, the gateway, the batch, the prefill (mostly skipped — the unchanged prefix is a prompt-cache hit), the decode loop. Within one "turn" as you experience it, this round trip commonly repeats several times, sometimes dozens. The figure below plays through a realistic exchange as a sequence diagram — you, the CLI, and the API — with the calls and token counts adding up on the way.</p>
+
+  <div class="figure" id="fig-toolloop"></div>
+
+  <p class="note">The token counts here are illustrative but the shape is honest: with a conversation of any length, prompt tokens dwarf generated ones by two orders of magnitude, which is exactly why prompt caching matters so much.</p>
+
+  <h3>The whole journey</h3>
+
+  <p>Let us total up one ordinary exchange — you ask Claude Code to fix a failing test, it reads a file, edits it, and reports back. That is three or four API calls. Across them, a few hundred thousand prompt tokens pass through prefill, the great majority resolved from cache. A few thousand tokens are generated, and each one of those — every word fragment that appears under your cursor — is the product of a complete pass through hundreds of billions of weights, spread across a team of accelerators working in lockstep. All of it, typically, inside a minute. The final figure below replays the whole journey end to end: out through the tunnel, across the internet, into the pod, and back as a stream of tokens — then a second, faster lap when a tool call sends the conversation around again.</p>
+
+  <div class="figure" id="fig-grand-tour"></div>
+
+  <p>It is tempting, watching text compose itself in a terminal, to file the whole thing under magic and move on. But nothing in the path we have traced is magic. It is escape codes and JSON, sockets and certificates, routers and load balancers, matrices multiplied very quickly, and a sampler picking one integer at a time — each layer ordinary on its own, each one inspectable if you care to look. The depth of the stack is real, and so is the plainness of every step in it. The next time a reply types itself out in front of you, you will know that the small pause before each word is not a flourish. It is the round trip — the whole round trip — happening again.</p>
+</section>
+
+<footer class="end">
+  <p>Every figure on this page is a simplification — real systems have more layers, more caches, and more failure handling than any diagram can hold. But the shape of the machinery is faithful: a terminal, a JSON document, a fleet of GPUs, and a model predicting one token at a time, in a loop.</p>
+  <p>Built with Claude Code, in the spirit of Bartosz Ciechanowski's <a href="https://ciechanow.ski/">wonderful interactive articles</a>. All graphics are hand-drawn canvas — no libraries, no trackers, no build step worth mentioning.</p>
+</footer>
+
+</article>
+<script src="js/main.js"></script>
+<script src="js/fig-agent-loop.js"></script>
+<script src="js/fig-attention.js"></script>
+<script src="js/fig-batching.js"></script>
+<script src="js/fig-bpe-merge.js"></script>
+<script src="js/fig-context-assembly.js"></script>
+<script src="js/fig-embedding.js"></script>
+<script src="js/fig-grand-tour.js"></script>
+<script src="js/fig-journey.js"></script>
+<script src="js/fig-kvcache.js"></script>
+<script src="js/fig-loadbalancer.js"></script>
+<script src="js/fig-prefill-decode.js"></script>
+<script src="js/fig-request-json.js"></script>
+<script src="js/fig-residual.js"></script>
+<script src="js/fig-sampling.js"></script>
+<script src="js/fig-sse.js"></script>
+<script src="js/fig-terminal.js"></script>
+<script src="js/fig-tls.js"></script>
+<script src="js/fig-tokenizer.js"></script>
+<script src="js/fig-toolloop.js"></script>
+</body>
+</html>
