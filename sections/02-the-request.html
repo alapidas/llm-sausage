@@ -1,0 +1,35 @@
+<section id="the-request">
+  <h2>The Request</h2>
+
+  <p>By the end of the previous section the CLI had gathered everything the model needs to see and serialized it into a single JSON document. Now that document has to leave your machine. It leaves as one ordinary HTTPS <code>POST</code> to <code>https://api.anthropic.com/v1/messages</code> — the same endpoint every other program that talks to the Claude API uses. There is no private tunnel and no special protocol; it is a web request like the ones your browser makes all day, only with an unusually large body and, as we will see, an unusually long-lived response.</p>
+
+  <p>It is worth dwelling on what the body contains, because the API is stateless: the server keeps no memory of your conversation between calls. Everything the model will know arrives inside this one request. The <code>model</code> field names which model should answer. <code>max_tokens</code> caps how long the reply may grow — a stop condition, not a target. <code>system</code> carries the CLI's standing instructions. <code>messages</code> is the conversation itself, an array that strictly alternates between <code>user</code> and <code>assistant</code> turns; when the model previously asked to run a tool, the tool's output travels back embedded in the next user turn as a <code>tool_result</code> content block, so from the API's point of view even the output of a shell command is just something you said. <code>tools</code> lists every tool the model may request, each described by a JSON Schema so that legal arguments are precisely defined. And <code>stream</code> is set to <code>true</code> — we will come back to that. Alongside the body ride a few headers: <code>x-api-key</code> — or an OAuth bearer token, if you signed in with a subscription — proves who is asking, <code>anthropic-version</code> pins the API's behavior to a known date, and <code>content-type</code> declares the body to be JSON.</p>
+
+  <p>In the figure below you can hover over or tap each highlighted part of an abbreviated request to see what it is for. A real body from a working session would run to hundreds of kilobytes, so the long strings are elided here.</p>
+
+  <div class="figure" id="fig-request-json"></div>
+
+  <h3>Before the first byte</h3>
+
+  <p>Sending a request to <code>api.anthropic.com</code> sounds like a single action, but a name is not an address. First comes DNS: your machine asks a resolver what IP address the name maps to, and the answer is usually not a computer in one particular datacenter but an address belonging to an edge network — infrastructure with points of presence spread around the world, arranged so that the address you get routes to somewhere close to you. With an address in hand, your machine opens a TCP connection: it sends a SYN, the far end answers SYN-ACK, and your machine replies ACK. That single round trip gives both sides agreed-upon sequence numbers, so lost or reordered packets can be detected and repaired later.</p>
+
+  <p>Only now does security enter. In TLS 1.3 your machine sends a ClientHello that already includes its half of a key exchange; the server answers with its own half, a certificate proving it really is <code>api.anthropic.com</code>, and a Finished message — all in one flight. Your machine verifies the certificate, sends its own Finished, and can attach encrypted application data to that very same flight. One round trip, and both ends hold symmetric keys that no eavesdropper can derive. This is the reason your API key, your source code, and the model's reply never cross the internet in readable form. The demonstration below replays the whole exchange as a sequence diagram, with a clock accumulating a plausible 30&nbsp;ms per round trip. Try the toggle: when the CLI reuses a connection it already has open, everything above the final arrow simply disappears.</p>
+
+  <div class="figure" id="fig-tls"></div>
+
+  <p>That toggle matters more than it may seem. An agentic session is not one request; it is a loop — model asks for a tool, CLI runs it, sends the result back, and so on, sometimes dozens of times. The CLI therefore keeps the connection warm with HTTP keep-alive, and every request after the first skips DNS, the TCP handshake, and the TLS handshake entirely, paying only the one-way travel time.</p>
+
+  <h3>Hop by hop</h3>
+
+  <p>The request itself, split into packets, now travels a path you never see: from your laptop to your Wi-Fi router, through your ISP's equipment, across a handful of backbone routers, and into the edge point of presence that your DNS answer pointed at. Each router along the way makes its decision by reading only the IP header — the destination address, a hop counter, a few flags — and forwards the packet on. The payload is TLS ciphertext to every one of these middleboxes; they could copy every byte and learn nothing beyond who is talking to whom, and roughly how much.</p>
+
+  <p>The time this takes has a hard floor: light in optical fiber travels at roughly two thirds of its speed in vacuum, about 200&nbsp;km per millisecond. Crossing a continent therefore costs tens of milliseconds no matter how clever the routing, which is exactly why edge networks try to terminate your connection close to you. In the figure below you can watch a packet make the trip, hover over or tap any node to see what it can read, and drag the slider from same-city to trans-oceanic distances to feel how geography dominates the total.</p>
+
+  <div class="figure" id="fig-journey"></div>
+
+  <p class="note">We drew five hops; a real <code>traceroute</code> typically shows ten to twenty, and the exact machinery fronting <code>api.anthropic.com</code> — which networks announce it, where TLS is terminated — is not public. What we describe here is how large API services are typically fronted; the physics of the trip is the same either way.</p>
+
+  <p>One last detail before we let the packets go. Because the request said <code>stream: true</code>, the response will not be a single document that arrives when the model is done. It will be a long-lived HTTP response carrying server-sent events, and the connection we worked so hard to establish stays open for the entire generation, delivering the reply piece by piece as it is produced. We will unpack that stream in the final section.</p>
+
+  <p>For now the packets have arrived at Anthropic's front door — and a large-scale inference service has to decide, in a few milliseconds, what to do with them.</p>
+</section>
