@@ -1,0 +1,35 @@
+<section id="the-way-back">
+  <h2>The Way Back</h2>
+
+  <p>The model has committed to a token. Right now it is nothing but an integer in accelerator memory — say, id <code>8543</code> — chosen by the sampler at the end of a forward pass. For that number to become a flicker of text in your terminal, it has to make the entire journey of this article in reverse, and it starts immediately. The serving stack does not wait for a sentence, or even a word, to finish. The id is looked up in the tokenizer's vocabulary, mapped back to its bytes — perhaps <code>Fix</code> — and pushed onto the HTTPS connection that has been sitting open this whole time. This is the connection the CLI asked for back when it set <code>"stream": true</code> in the request body: instead of one response, the server answers with <code>Content-Type: text/event-stream</code> and keeps the socket alive, trickling the reply out as <em>server-sent events</em>, one small encrypted chunk at a time, back through the same TLS tunnel the request came in on.</p>
+
+  <p>The stream has a fixed grammar. First comes a <code>message_start</code> event carrying the shell of the reply — its id, the model name, and how many input tokens the prompt consumed. Then, for each block of content, a <code>content_block_start</code>, followed by many <code>content_block_delta</code> events, each holding a small fragment of text. A fragment usually corresponds to a token or a handful of them; on the wire it is just a couple of lines:</p>
+
+  <pre><code>event: content_block_delta
+data: {"type":"content_block_delta","index":0,
+       "delta":{"type":"text_delta","text":"Fix"}}</code></pre>
+
+  <p>When a block ends, a <code>content_block_stop</code> follows, then a <code>message_delta</code> with the <code>stop_reason</code> and the final token counts, and finally <code>message_stop</code>. The typewriter effect you see in the terminal is not an animation that some frontend engineer tuned to feel pleasant. It is the actual cadence of generation reaching you: each delta exists because, tens of milliseconds ago, one more decode iteration completed in a datacenter, and the result was shipped to you before the next one was even sampled. In the demonstration below, you can watch the event frames come down the wire on the left while Claude Code, on the right, accumulates their fragments into visible text. The slider changes the pace, and the button replays the stream from the top.</p>
+
+  <div class="figure" id="fig-sse"></div>
+
+  <p>On your machine, the loop from the first section now runs in reverse. There, keystrokes became bytes, bytes became JSON, JSON became a request. Here, the CLI reads each event off the socket as it arrives, parses the little JSON payload, appends the fragment to its buffer, and re-renders the reply — markdown parsed live, headings and code blocks colored with the same ANSI escape sequences we met at the very beginning — dozens of times per response, once per repaint, so the text appears to grow under a blinking cursor.</p>
+
+  <h3>Closing the loop</h3>
+
+  <p>Very often, though, the stream does not end in prose. Instead of a text block, the model opens a <code>content_block_start</code> of type <code>tool_use</code>, naming a tool — <code>Read</code>, say — and then streams the tool's JSON input in <code>input_json_delta</code> fragments. It is worth pausing on this: the arguments to the tool call are themselves generated token by token, a JSON string assembled through the same forward passes as any sentence, and streamed back with the same event grammar. The stream then closes with <code>stop_reason: "tool_use"</code>, and on the server, nothing further happens. The model holds no thread of execution, no pending callback. The CLI is now holding the ball.</p>
+
+  <p>What happens next happens entirely on your machine. Claude Code shows you the permission prompt; you press <code>y</code>; the CLI spawns a real process — opens the file, runs the command — against your actual disk. The model never touched it and never could; it only ever emitted text describing what it wanted. The CLI wraps the outcome in a <code>tool_result</code> block, appends it to the conversation, and sends the whole grown context off in a fresh <code>POST</code>. And with that, everything in this article happens again: the TLS handshake (skipped — the connection is still warm), the trip through the internet, the gateway, the batch, the prefill (mostly skipped — the unchanged prefix is a prompt-cache hit), the decode loop. Within one "turn" as you experience it, this round trip commonly repeats several times, sometimes dozens. The figure below plays through a realistic exchange as a sequence diagram — you, the CLI, and the API — with the calls and token counts adding up on the way.</p>
+
+  <div class="figure" id="fig-toolloop"></div>
+
+  <p class="note">The token counts here are illustrative but the shape is honest: with a conversation of any length, prompt tokens dwarf generated ones by two orders of magnitude, which is exactly why prompt caching matters so much.</p>
+
+  <h3>The whole journey</h3>
+
+  <p>Let us total up one ordinary exchange — you ask Claude Code to fix a failing test, it reads a file, edits it, and reports back. That is three or four API calls. Across them, a few hundred thousand prompt tokens pass through prefill, the great majority resolved from cache. A few thousand tokens are generated, and each one of those — every word fragment that appears under your cursor — is the product of a complete pass through hundreds of billions of weights, spread across a team of accelerators working in lockstep. All of it, typically, inside a minute. The final figure below replays the whole journey end to end: out through the tunnel, across the internet, into the pod, and back as a stream of tokens — then a second, faster lap when a tool call sends the conversation around again.</p>
+
+  <div class="figure" id="fig-grand-tour"></div>
+
+  <p>It is tempting, watching text compose itself in a terminal, to file the whole thing under magic and move on. But nothing in the path we have traced is magic. It is escape codes and JSON, sockets and certificates, routers and load balancers, matrices multiplied very quickly, and a sampler picking one integer at a time — each layer ordinary on its own, each one inspectable if you care to look. The depth of the stack is real, and so is the plainness of every step in it. The next time a reply types itself out in front of you, you will know that the small pause before each word is not a flourish. It is the round trip — the whole round trip — happening again.</p>
+</section>
