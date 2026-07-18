@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How the Sausage Gets Made — Inside a Claude Code Session</title>
+<meta name="description" content="An interactive explainer of everything that happens when you talk to Claude Code — from your terminal, across the wire, into a datacenter, and through a neural network, one token at a time.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129386;</text></svg>">
+</head>
+<body>
+<article>
+
+<header class="hero">
+  <h1>How the Sausage Gets Made</h1>
+  <p class="subtitle">What actually happens when you talk to Claude&nbsp;Code — from the keystroke in your terminal, across the wire, into a datacenter, and through a neural network, one token at a time.</p>
+  <p class="byline">An interactive explainer · July 2026</p>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#your-terminal">Your terminal</a></li>
+    <li><a href="#the-request">The request</a></li>
+    <li><a href="#into-the-datacenter">Into the datacenter</a></li>
+    <li><a href="#tokens">Tokens</a></li>
+    <li><a href="#the-forward-pass">The forward pass</a></li>
+    <li><a href="#the-way-back">The way back</a></li>
+  </ol>
+</nav>
+
+<!--SECTIONS-->
+
+<footer class="end">
+  <p>Every figure on this page is a simplification — real systems have more layers, more caches, and more failure handling than any diagram can hold. But the shape of the machinery is faithful: a terminal, a JSON document, a fleet of GPUs, and a model predicting one token at a time, in a loop.</p>
+  <p>Built with Claude Code, in the spirit of Bartosz Ciechanowski's <a href="https://ciechanow.ski/">wonderful interactive articles</a>. All graphics are hand-drawn canvas — no libraries, no trackers, no build step worth mentioning.</p>
+</footer>
+
+</article>
+<script src="js/main.js"></script>
+<!--FIGSCRIPTS-->
+</body>
+</html>
