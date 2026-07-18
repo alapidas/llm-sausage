@@ -1,0 +1,115 @@
+<section id="your-terminal">
+  <h2>Your Terminal</h2>
+
+  <p>It starts with a sentence. You open a terminal, run <code>claude</code>, and ask
+  for something ordinary&nbsp;&mdash; fix the failing test, rename this function. You press
+  Enter, a spinner turns for a moment, and an answer streams back character by
+  character, as if someone on the other end were typing. It feels like a chat
+  window. It is nothing like a chat window. Between your keystroke and the first
+  character of the reply, your sentence will be folded into a document hundreds of
+  thousands of characters long, serialized into JSON, carried across the internet
+  to a datacenter, sliced into tokens, pushed through layer after layer of matrix
+  arithmetic on GPUs, and turned back into text one small piece at a time. In this
+  article we will follow that one request the whole way there and back. We begin
+  on your own machine, where&nbsp;&mdash; before any AI is involved at all&nbsp;&mdash; a surprising
+  amount is already going on.</p>
+
+  <h3>A program drawing a picture of a prompt</h3>
+
+  <p>The interface that greets you is not the terminal&rsquo;s own prompt. It is a
+  Node.js process that has taken over the window and is drawing a text-mode user
+  interface, somewhat the way a game draws frames. Ordinarily a terminal runs in
+  what Unix calls <em>canonical mode</em>: the operating system collects your
+  keystrokes into a line buffer, handles backspace for you, echoes each character
+  to the screen, and only hands the finished line to the program when you press
+  Enter. An interactive interface cannot work that way&nbsp;&mdash; it wants to react to
+  every keystroke, offer completions, move a selection with the arrow keys. So
+  Claude Code switches the terminal into <em>raw mode</em>. From then on every key
+  you press is delivered to the Node process immediately, as one or a few raw
+  bytes on standard input, and nothing is echoed automatically. If the program did
+  nothing, your typing would be invisible.</p>
+
+  <p>Every character you see is therefore the program rendering, not the terminal
+  echoing. When a byte arrives, the CLI updates its internal state&nbsp;&mdash; the text of
+  your draft message, the cursor position&nbsp;&mdash; and repaints the affected part of the
+  screen by writing ANSI escape sequences to standard output: move the cursor
+  here, switch to this color, erase to the end of the line, write these
+  characters. The blinking block cursor, the border around the input box, the
+  spinner that appears while a request is in flight&nbsp;&mdash; all of it is redrawn, many
+  times a second, through the same output channel your shell uses to print the
+  results of <code>ls</code>. In the demonstration below, a request types itself into a
+  miniature terminal, and the lane underneath tracks each keystroke: the key
+  event, the raw byte handed to the Node process, and a running count of screen
+  redraws. Watch the counter keep climbing after Enter&nbsp;&mdash; even the idle spinner is
+  repaint after repaint.</p>
+
+  <div class="figure" id="fig-terminal"></div>
+
+  <h3>What Enter actually sends</h3>
+
+  <p>When you press Enter, it would be reasonable to assume the CLI sends your
+  sentence to the model. It does&nbsp;&mdash; but your sentence rides along at the very end
+  of something much larger. The API is stateless: between calls, the model
+  retains no memory of your project or your earlier messages. So on every single
+  request, the CLI assembles the full context from scratch. First comes a large
+  <em>system prompt</em>: several thousand words of instructions about how to
+  behave&nbsp;&mdash; how to format answers, when to ask before acting, how to use tools.
+  Then the <em>tool definitions</em>: every tool the model may request&nbsp;&mdash;
+  <code>Bash</code>, <code>Read</code>, <code>Edit</code>, <code>Grep</code>, and more&nbsp;&mdash; each described as a
+  JSON schema, its parameters and their types spelled out in full. Then project
+  memory: files such as <code>CLAUDE.md</code>, notes about how this codebase works.
+  Then the entire conversation so far: every message, every reply, and every tool
+  result&nbsp;&mdash; file contents, command output, search matches&nbsp;&mdash; accumulated over the
+  session. And then, at last, your new message.</p>
+
+  <p>The figure below lays this assembly out as a single horizontal bar: the
+  model&rsquo;s <em>context window</em>, with room for 200,000 tokens. A token is a short
+  chunk of text, roughly three-quarters of an English word; we will meet tokens
+  properly in a later section. Drag the slider to extend the conversation, and
+  hover over or touch each segment to see what it holds. Notice how quickly the
+  history grows&nbsp;&mdash; each turn adds not only what was said but everything the tools
+  returned&nbsp;&mdash; and how comically thin the green sliver of your new message remains
+  throughout.</p>
+
+  <div class="figure" id="fig-context-assembly"></div>
+
+  <p class="note">The segment sizes here are illustrative rather than measured;
+  they change between versions. But the system prompt and tool schemas together
+  typically account for tens of thousands of tokens before you have typed
+  anything at all.</p>
+
+  <h3>An agent, not an oracle</h3>
+
+  <p>There is a second surprise hiding in that bar: the tool results. Where do
+  they come from? The model itself cannot open your files, run your tests, or
+  execute anything at all. It receives text and produces text&nbsp;&mdash; that is the
+  entirety of its powers. What makes Claude Code an <em>agent</em> is the program
+  wrapped around the model. When the model wants to look at
+  <code>auth.spec.ts</code>, it replies not with an answer but with a structured
+  <code>tool_use</code> request&nbsp;&mdash; in effect, &ldquo;please run <code>Read</code> on this path.&rdquo;
+  The CLI checks that request against your permission settings (asking you first
+  when the rules require it), executes the tool locally on your machine, packages
+  the output into a <code>tool_result</code> message, appends it to the conversation,
+  and sends the whole context to the API again. The model, now seeing the file&rsquo;s
+  contents, may ask to run the test suite&nbsp;&mdash; and the cycle repeats.</p>
+
+  <p>In the animation below you can watch this loop turn. A single &ldquo;fix the
+  failing test&rdquo; routinely fans out into half a dozen API calls before the model
+  finally responds with plain prose instead of another tool request. How a
+  finished reply becomes an edit on your disk is a story for the final section;
+  for now it is enough to see the shape of the cycle.</p>
+
+  <div class="figure" id="fig-agent-loop"></div>
+
+  <p>Step back and notice what this architecture implies. Everything the model
+  will ever know about your request is inside that one growing document. It
+  cannot peek at your screen, browse your filesystem in the background, or
+  recall what you asked yesterday. If a fact is not in the context&nbsp;&mdash; placed
+  there by the system prompt, a memory file, or a tool result the model itself
+  asked for&nbsp;&mdash; then for the model it does not exist. There is no hidden channel.
+  The context is the interface.</p>
+
+  <p>At this point the CLI serializes the assembled context into the body of a
+  JSON request addressed to Anthropic&rsquo;s API. In the next section, we follow it
+  out of your machine.</p>
+</section>

@@ -1,0 +1,39 @@
+<section id="into-the-datacenter">
+  <h2>Into the Datacenter</h2>
+
+  <p>We left your request as a stream of encrypted packets, addressed to <code>api.anthropic.com</code>, disappearing into the network. Now they arrive. The first machines to touch them are edge servers whose job is mundane but essential: they hold the private keys for the TLS session, so this is where the encryption is finally peeled away and your request becomes readable JSON again — inside Anthropic's infrastructure and nowhere else along the way.</p>
+
+  <p>The decrypted request then meets an <strong>API gateway</strong>. Before any model sees a single byte, the gateway authenticates the API key in the <code>x-api-key</code> header, checks it against rate limits and usage quotas, and validates the JSON body — is the model name real, is <code>max_tokens</code> sane, does the message list parse? Requests that fail any of these checks are turned away right here, with the <code>401</code> or <code>429</code> answered in a few milliseconds without waking a single accelerator. Requests that pass are handed to a load balancer, which picks one backend out of a large fleet of <strong>model servers</strong> — and because each fleet holds one model's weights, a request for Opus and a request for Haiku part ways at this point and travel to different pools of machines.</p>
+
+  <p class="note">One honest caveat before we go further: the exact layout of Anthropic's production stack is not public, and we won't pretend to know it. Everything in this section describes how large-scale LLM inference services are generally built — the standard, well-documented machinery of the field. The real system surely differs in details, but these are the mechanisms any service at this scale relies on.</p>
+
+  <p>In the demonstration below, you can watch this front door at work. Requests stream in from the left as colored dots, pause briefly at the gateway while their credentials are checked — the occasional red one is bounced for a bad key or an exceeded rate limit — and the survivors are routed to whichever server has capacity to spare. Your own request is the orange dot. Drag the slider to raise the incoming rate and watch the load bars respond.</p>
+
+  <div class="figure" id="fig-loadbalancer"></div>
+
+  <h3>A model too big for one chip</h3>
+
+  <p>Why does the request need a special "model server" at all, rather than any machine in the building? Because a frontier model is mostly one enormous block of numbers: its weights run to hundreds of gigabytes, far more than any single GPU or accelerator can hold. So the model is <strong>sharded</strong> — sliced across a group of accelerators wired together with very fast interconnects, and that whole group acts as one logical server. When we drew a single box labeled "model server" above, the box really contains several chips, each holding its slice of the weights, and every single token generated for you involves all of them working in concert.</p>
+
+  <p>Those weights were loaded once, when the server started, and they stay resident in accelerator memory permanently. This inverts the usual picture of a web service, where data is fetched to wherever the code runs. Here the model is far too heavy to move, so it never does: your few kilobytes of request travel to the weights, flow through them, and leave. The weights are the factory; your request is the workpiece.</p>
+
+  <h3>Sharing the assembly line</h3>
+
+  <p>Here is the fact that shapes everything about how these servers are run: an accelerator performs the arithmetic for one generation step so quickly that serving a single user would leave it idle almost all the time. The expensive part of each step is streaming those hundreds of gigabytes of weights through the compute units — and having streamed them, the chip can apply them to one request or to dozens for nearly the same cost. So serving systems <strong>batch</strong>: many strangers' requests ride through the very same forward passes, sharing each read of the weights.</p>
+
+  <p>The refinement that makes this practical is called <strong>continuous batching</strong>. Requests don't wait for a full busload to assemble; they join and leave the batch at the granularity of a single token. The moment one request finishes and frees its slot, another slides in mid-stream, and the assembly line never pauses. The figure below shows one server's batch as a timeline: each row is a slot, each column one forward pass, and each rounded bar one request — a short bright chunk when its prompt is absorbed, then one small cell per generated token. Yours is again in orange. Raise the arrival rate and watch the occupancy and the combined token rate climb.</p>
+
+  <div class="figure" id="fig-batching"></div>
+
+  <p>Notice what the readout implies: the server's total output grows almost linearly with occupancy, while each individual request still gets a token on every pass. This is why batching is universal — it multiplies the useful work per pass without slowing any one user down much. You have almost certainly never noticed the strangers sharing your forward passes, and that is the point.</p>
+
+  <h3>Prefill and decode</h3>
+
+  <p>Within each request, the work splits into two very different phases, and the split explains something you have felt every time you use Claude. First comes <strong>prefill</strong>: the entire prompt — every token of it — is pushed through the model in one massively parallel pass, because all the prompt's tokens are already known and can be processed at once. This phase is limited by raw arithmetic, and its duration is your <em>time to first token</em>. Then comes <strong>decode</strong>: tokens are generated one at a time, each requiring its own complete pass through every layer, each pass limited not by arithmetic but by how fast the weights can be streamed from memory. That per-pass time sets your tokens-per-second. One big gulp, then many small sips — that is the pause-then-stream rhythm you know. In the demonstration below, you can replay both phases in slow motion, and lengthen the prompt to see the first-token wait grow while the decode rate stays flat.</p>
+
+  <div class="figure" id="fig-prefill-decode"></div>
+
+  <p>Prefill is also where a well-known optimization lives. If the beginning of your prompt is identical to one the server processed moments ago — and in an agent loop it almost always is, since every iteration resends the same system prompt, tool definitions, and conversation so far — the service can keep the computed internal state of that prefix and skip re-prefilling it. This is <strong>prompt caching</strong>, and it is not speculation: it is a documented feature of Anthropic's API, which is exactly why Claude Code marks the stable prefixes of its requests as cacheable. It is the difference between an agent loop that re-reads the whole transcript from scratch on every turn and one that only pays for what's new.</p>
+
+  <p>There is one thing we have quietly glossed over. We keep saying the model processes "tokens," but your request is still text — bytes of UTF-8. Before the first layer of the model can touch it, that text has to become numbers. How that happens is our next stop.</p>
+</section>
