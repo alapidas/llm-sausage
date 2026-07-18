@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; form-action 'none'; base-uri 'none'">
 <title>How the Sausage Gets Made — Inside a Claude Code Session</title>
 <meta name="description" content="An interactive explainer of everything that happens when you talk to Claude Code — from your terminal, across the wire, into a datacenter, and through a neural network, one token at a time.">
 <link rel="stylesheet" href="css/style.css">
@@ -357,5 +357,6 @@ data: {"type":"content_block_delta","index":0,
 <script src="js/fig-tls.js"></script>
 <script src="js/fig-tokenizer.js"></script>
 <script src="js/fig-toolloop.js"></script>
+<!-- Cloudflare Web Analytics --><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "9e61999cc5ae4f8298904804360d855a"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
