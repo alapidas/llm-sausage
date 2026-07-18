@@ -7,7 +7,7 @@
 
   <div class="figure" id="fig-residual"></div>
 
-  <p>Every token in your context makes this trip at the same time — the layers process all positions in parallel, which is a large part of why GPUs suit this work so well. And while the layers are identical in shape, each has its own learned weights, so each adds a different kind of refinement to the stream.</p>
+  <p>Every token in your context makes this trip at the same time — the layers process all positions in parallel, a large part of why GPUs suit this work. And while the layers are identical in shape, each has its own learned weights, so each adds a different kind of refinement to the stream.</p>
 
   <h3>Attention</h3>
 
@@ -21,7 +21,7 @@
 
   <h3>One distribution</h3>
 
-  <p>At the top of the stack, one more multiplication. The final vector of the <em>last</em> token is projected against the <strong>unembedding</strong> — a matrix with one row per entry in the vocabulary — producing one score per token: the <strong>logits</strong>. A last softmax converts them into probabilities. It is worth pausing on the asymmetry here. A machine with billions of parameters has just run end to end, layer by layer, across your whole context, and everything it bought is exactly one thing: a probability distribution over the next token. Not an answer, not a sentence. One distribution.</p>
+  <p>At the top of the stack, one more multiplication. The final vector of the <em>last</em> token is projected against the <strong>unembedding</strong> — a matrix with one row per entry in the vocabulary — producing one score per token: the <strong>logits</strong>. A last softmax converts them into probabilities. It is worth pausing on the asymmetry here. A machine with billions of parameters has just run end to end across your whole context, and everything it bought is exactly one thing: a probability distribution over the next token. Not an answer, not a sentence. One distribution.</p>
 
   <p>Something still has to turn that distribution into a choice. Always taking the single most likely token — greedy decoding — sounds sensible but produces stilted, repetitive text that easily falls into loops. Instead, the next token is <em>sampled</em> at random from the distribution, after reshaping it with a <strong>temperature</strong>: the logits are divided by <code>T</code> before the softmax. As <code>T</code> approaches zero the distribution sharpens toward the deterministic favorite; as it grows the distribution flattens toward noise. A companion trick, <strong>top-p</strong>, discards the long tail of barely-plausible tokens before sampling. The figure below runs the real softmax arithmetic on a set of hand-designed logits — drag the temperature slider to reshape the bars, then press Sample to watch a random draw land on the cumulative bar and pick the next token:</p>
 
