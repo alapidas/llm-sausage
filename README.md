@@ -1,7 +1,5 @@
 # llm-sausage 🌭
 
-**[Read it live → alapidas.github.io/llm-sausage](https://alapidas.github.io/llm-sausage/)**
-
 **How the Sausage Gets Made** — an interactive, [ciechanow.ski](https://ciechanow.ski/mechanical-watch/)-style
 explainer of everything that happens when you talk to Claude Code: from the
 keystroke in your terminal, through the HTTPS request, into a datacenter,
