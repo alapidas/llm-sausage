@@ -1,5 +1,7 @@
 # llm-sausage 🌭
 
+**[Read it live → alapidas.github.io/llm-sausage](https://alapidas.github.io/llm-sausage/)**
+
 **How the Sausage Gets Made** — an interactive, [ciechanow.ski](https://ciechanow.ski/mechanical-watch/)-style
 explainer of everything that happens when you talk to Claude Code: from the
 keystroke in your terminal, through the HTTPS request, into a datacenter,
@@ -11,7 +13,9 @@ beyond a tiny concatenation script, no external resources of any kind.
 
 ## Viewing
 
-Open `index.html` in a browser, or serve the directory:
+The live site is at **<https://alapidas.github.io/llm-sausage/>**.
+
+To run it locally, open `index.html` in a browser, or serve the directory:
 
 ```sh
 python3 -m http.server 8000
