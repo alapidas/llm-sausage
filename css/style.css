@@ -93,6 +93,21 @@ header.hero .byline {
   color: var(--faint);
 }
 
+header.hero .byline a {
+  color: var(--blue-dark);
+  text-decoration: none;
+}
+
+header.hero .byline a:hover { text-decoration: underline; }
+
+.gh-ico {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  fill: currentColor;
+  margin-right: 0.35em;
+}
+
 nav.toc {
   margin: 2.5rem auto 3rem;
   max-width: var(--measure);
