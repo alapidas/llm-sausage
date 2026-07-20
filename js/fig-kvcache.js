@@ -2,7 +2,8 @@
 /* fig-kvcache — the KV cache growing one column per decode step,
    versus the naive world that recomputes every column every step. */
 Figures.register('fig-kvcache', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 232 });
+  const cv = kit.makeCanvas(container, { height: 232,
+    ariaLabel: 'Diagram of the key-value cache growing one column per decode step, compared with recomputing every column when the cache is disabled.' });
   const ctx = cv.ctx;
 
   const PROMPT = ['Explain', 'why', 'the', 'test', 'fails', ':'];
@@ -38,6 +39,7 @@ Figures.register('fig-kvcache', (container, kit) => {
   });
   kit.makeToggle(controls, 'use KV cache', true, v => {
     useCache = v;
+    lastStep = useCache ? 1 : n;   /* keep the "this step" readout consistent with the new mode */
     draw();
   });
 
@@ -104,7 +106,7 @@ Figures.register('fig-kvcache', (container, kit) => {
       for (let r = 0; r < 2; r++) {
         const ry = gy + r * rowH;
         ctx.fillStyle = PAL.faint;
-        ctx.font = '10px ' + PAL.mono;
+        ctx.font = '11px ' + PAL.mono;
         ctx.fillText(r === 0 ? 'K' : 'V', left - 8, ry + rowH / 2);
         for (let i = 0; i < n; i++) {
           const gx = left + i * colW;
@@ -146,7 +148,7 @@ Figures.register('fig-kvcache', (container, kit) => {
       ctx.lineTo(bx2 - 1, gridBottom + 6.5);
       ctx.strokeStyle = PAL.faint;
       ctx.stroke();
-      ctx.font = '10px ' + PAL.sans;
+      ctx.font = '11px ' + PAL.sans;
       ctx.fillStyle = PAL.faint;
       ctx.textAlign = 'center';
       ctx.fillText('prompt (prefill)', (left + bx2) / 2, gridBottom + 15);
@@ -161,12 +163,12 @@ Figures.register('fig-kvcache', (container, kit) => {
     ctx.fillText('KV cache: ' + n + ' tok × ' + MB_PER_TOKEN.toFixed(1) + ' MB ≈ '
       + (n * MB_PER_TOKEN).toFixed(1) + ' MB', left, ry0);
     if (useCache) {
-      ctx.fillStyle = PAL.green;
+      ctx.fillStyle = PAL.greenDark;
       ctx.fillText('computed this step: 1 column', left, ry0 + 17);
       ctx.fillStyle = PAL.faint;
       ctx.fillText('columns so far: ' + cacheCols + ' · naive: ' + naiveCols, left, ry0 + 34);
     } else {
-      ctx.fillStyle = PAL.red;
+      ctx.fillStyle = PAL.redDark;
       ctx.fillText('this step: ' + lastStep + ' columns recomputed', left, ry0 + 17);
       ctx.fillStyle = PAL.faint;
       ctx.fillText('columns so far: ' + naiveCols + ' · cached: ' + cacheCols, left, ry0 + 34);

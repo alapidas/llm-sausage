@@ -75,7 +75,10 @@ Figures.register('fig-embedding', (container, kit) => {
     if (POINTS[p0].word === 'cat') { sel = p0; break; }
   }
 
-  var cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 430 });
+  var cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 430,
+    ariaLabel: 'A two-dimensional map of word embeddings where related words ' +
+      'cluster together, beside a schematic readout of the selected token\'s ' +
+      'vector; use the arrow keys to move the selection between words.' });
   var ctx = cv.ctx;
 
   function neighbors(i, n) {
@@ -91,6 +94,7 @@ Figures.register('fig-embedding', (container, kit) => {
 
   function draw() {
     var w = cv.w, h = cv.h;
+    var narrow = w < 460;
     ctx.clearRect(0, 0, w, h);
     var p = POINTS[sel];
     var panelW = kit.clamp(w * 0.26, 92, 138);
@@ -180,15 +184,19 @@ Figures.register('fig-embedding', (container, kit) => {
         ctx.lineWidth = 1.4;
         ctx.stroke();
       }
-      ctx.fillStyle = isSel ? PAL.inkStrong : (isNear ? PAL.ink : PAL.faint);
-      ctx.textBaseline = 'middle';
-      var lw = ctx.measureText(pt.word).width;
-      if (x + 7 + lw > w - 4) {
-        ctx.textAlign = 'right';
-        ctx.fillText(pt.word, x - 7, y);
-      } else {
-        ctx.textAlign = 'left';
-        ctx.fillText(pt.word, x + 7, y);
+      /* Narrow: the map is too cramped for 40 labels, so only the selected
+         word and its nearest neighbors are named; the rest stay as dots. */
+      if (!narrow || isSel || isNear) {
+        ctx.fillStyle = isSel ? PAL.inkStrong : (isNear ? PAL.ink : PAL.faint);
+        ctx.textBaseline = 'middle';
+        var lw = ctx.measureText(pt.word).width;
+        if (x + 7 + lw > w - 4) {
+          ctx.textAlign = 'right';
+          ctx.fillText(pt.word, x - 7, y);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.fillText(pt.word, x + 7, y);
+        }
       }
     }
 
@@ -225,6 +233,31 @@ Figures.register('fig-embedding', (container, kit) => {
   }
   cv.canvas.addEventListener('pointermove', onPointer);
   cv.canvas.addEventListener('pointerdown', onPointer);
+
+  /* Keyboard: move the selection to the nearest word in the pressed
+     direction, so the map is operable without a pointer. */
+  function moveSel(dirx, diry) {
+    var cur = POINTS[sel], best = -1, bestScore = Infinity;
+    for (var i = 0; i < POINTS.length; i++) {
+      if (i === sel) continue;
+      var dx = POINTS[i].x - cur.x, dy = POINTS[i].y - cur.y;
+      var along = dx * dirx + dy * diry;
+      if (along <= 0.001) continue;                 // must move that way
+      var perp = dx * diry - dy * dirx;             // sideways deviation
+      var score = along + 2 * Math.abs(perp);       // prefer aligned, near words
+      if (score < bestScore) { bestScore = score; best = i; }
+    }
+    if (best >= 0 && best !== sel) { sel = best; draw(); }
+  }
+  var ARROWS = { ArrowRight: [1, 0], ArrowLeft: [-1, 0],
+                 ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  cv.canvas.setAttribute('tabindex', '0');
+  cv.canvas.addEventListener('keydown', function (ev) {
+    var d = ARROWS[ev.key];
+    if (!d) return;
+    ev.preventDefault();
+    moveSel(d[0], d[1]);
+  });
 
   cv.onResize(draw);
   draw();

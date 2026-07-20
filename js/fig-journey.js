@@ -5,7 +5,8 @@
 'use strict';
 
 Figures.register('fig-journey', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 380 });
+  const cv = kit.makeCanvas(container, { height: 380,
+    ariaLabel: "A packet traveling from your laptop to Anthropic's front end, staying encrypted at every router until the far end of the TLS tunnel." });
   const ctx = cv.ctx;
   const controls = kit.makeControls(container);
 
@@ -121,9 +122,9 @@ Figures.register('fig-journey', (container, kit) => {
     kit.roundedRect(ctx, -16, -11, 8, 22, 4); ctx.fill();
     ctx.fillStyle = PAL.bg; ctx.fillRect(-10, -11, 3, 22);
     ctx.fillStyle = PAL.blue; ctx.fillRect(-10, -11, 2, 22);
-    ctx.fillStyle = PAL.faint; ctx.font = '8.5px ' + PAL.mono; ctx.textAlign = 'left';
-    ctx.fillText(cipherRow1.slice(0, 4), -6, -2.5);  // scrambled body
-    ctx.fillText(cipherRow2.slice(2, 6), -6, 7);
+    ctx.fillStyle = PAL.faint; ctx.font = '11px ' + PAL.mono; ctx.textAlign = 'left';
+    ctx.fillText(cipherRow1.slice(0, 3), -6, -0.5);  // scrambled body
+    ctx.fillText(cipherRow2.slice(2, 5), -6, 9.5);
     ctx.restore();
   }
 
@@ -179,8 +180,8 @@ Figures.register('fig-journey', (container, kit) => {
     ctx.fillStyle = PAL.faint; ctx.font = '11px ' + PAL.mono;
     ctx.fillText(cipherRow1, ix + 10, iy + 41);                        // ciphertext
     ctx.fillText(cipherRow2, ix + 10, iy + 58);
-    ctx.textAlign = 'right'; ctx.font = '600 10.5px ' + PAL.sans;
-    ctx.fillStyle = PAL.green; ctx.fillText('readable', ix + iw - 8, iy + 16);
+    ctx.textAlign = 'right'; ctx.font = '600 11px ' + PAL.sans;
+    ctx.fillStyle = PAL.greenDark; ctx.fillText('readable', ix + iw - 8, iy + 16);
     ctx.fillStyle = PAL.bg; ctx.fillRect(ix + iw - 72, iy + 30, 72, 16);
     ctx.fillStyle = PAL.red; ctx.fillText('ciphertext', ix + iw - 8, iy + 42);
     ctx.restore();
@@ -205,10 +206,12 @@ Figures.register('fig-journey', (container, kit) => {
   const loop = kit.animLoop(dt => {
     const lats = hopLats();
     churn += dt;
-    if (churn > 0.2) {          // ciphertext slowly churns
+    if (churn > 0.2) {          // ciphertext slowly churns (both rows)
       churn = 0;
       const i = (Math.random() * cipherRow1.length) | 0;
       cipherRow1 = cipherRow1.slice(0, i) + GLYPHS[(Math.random() * GLYPHS.length) | 0] + cipherRow1.slice(i + 1);
+      const j = (Math.random() * cipherRow2.length) | 0;
+      cipherRow2 = cipherRow2.slice(0, j) + GLYPHS[(Math.random() * GLYPHS.length) | 0] + cipherRow2.slice(j + 1);
     }
     if (arrived) {
       holding += dt;
@@ -231,11 +234,24 @@ Figures.register('fig-journey', (container, kit) => {
       const d = (p.x - n.x) ** 2 + (p.y - n.y) ** 2;
       if (d < bestD) { bestD = d; best = i; }
     });
+    cv.canvas.style.cursor = best >= 0 ? 'pointer' : 'default';
     if (best !== hover) { hover = best; draw(); }
   }
   cv.canvas.addEventListener('pointermove', pick);
   cv.canvas.addEventListener('pointerdown', pick);
   cv.canvas.addEventListener('pointerleave', () => { hover = -1; draw(); });
+
+  /* keyboard: step the inspected node with the arrow keys */
+  cv.canvas.tabIndex = 0;
+  cv.canvas.addEventListener('keydown', ev => {
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') {
+      hover = hover < 0 ? 0 : Math.min(NODES.length - 1, hover + 1);
+      ev.preventDefault(); draw();
+    } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
+      hover = hover < 0 ? NODES.length - 1 : Math.max(0, hover - 1);
+      ev.preventDefault(); draw();
+    }
+  });
 
   kit.caption(container,
     'A packet’s trip from your laptop to Anthropic’s front end. Every router forwards on the ' +

@@ -3,7 +3,8 @@
 'use strict';
 
 Figures.register('fig-prefill-decode', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 340 });
+  const cv = kit.makeCanvas(container, { height: 340,
+    ariaLabel: 'Diagram contrasting prefill, one parallel pass over the whole prompt, with decode, one full pass per generated token.' });
   const controls = kit.makeControls(container);
 
   const NL = 8;            // layer bars in the stack
@@ -133,7 +134,7 @@ Figures.register('fig-prefill-decode', (container, kit) => {
       ctx.fillText('prefill: 1 pass, whole prompt', barX, stackTop + stackH + 15);
       ctx.fillText('in parallel — compute-bound', barX, stackTop + stackH + 28);
     } else if (!finished) {
-      ctx.fillStyle = PAL.orange;
+      ctx.fillStyle = PAL.orangeDark;
       ctx.fillText('decode: 1 pass per token', barX, stackTop + stackH + 15);
       ctx.fillText('— memory-bound', barX, stackTop + stackH + 28);
     } else {
@@ -162,12 +163,12 @@ Figures.register('fig-prefill-decode', (container, kit) => {
       ty += 17;
     }
     if (emitted > 1) {
-      ctx.fillStyle = PAL.orange;
+      ctx.fillStyle = PAL.orangeDark;
       ctx.fillText('then ' + DECODE_MS + ' ms per token', tx, ty);
       ty += 17;
       if (finished) {
         ctx.fillStyle = PAL.faint;
-        ctx.fillText('≈' + Math.round(1000 / DECODE_MS) + ' tok/s, flat', tx, ty);
+        ctx.fillText('≈' + Math.round(1000 / DECODE_MS) + ' tok/s', tx, ty);
       }
     }
   }
@@ -185,7 +186,7 @@ Figures.register('fig-prefill-decode', (container, kit) => {
   kit.caption(container,
     'Prefill absorbs the whole prompt in a single parallel pass — that pass is your time to ' +
     'first token, and it grows with prompt length. Decode then makes one full pass through ' +
-    'every layer for each token, at a rate that does not depend on how long the prompt was. ' +
-    'Times shown are illustrative and the clock is slowed for visibility.');
+    'every layer for each token, at a roughly steady rate — in reality it slows gradually as ' +
+    'the context and its cache grow. Times shown are illustrative and the clock is slowed for visibility.');
   return loop;
 });

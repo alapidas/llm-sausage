@@ -3,7 +3,8 @@
    -> tool_result -> model, with a pulse lapping the loop and an API-call
    counter. After a few laps the pulse exits to a "final answer" node. */
 Figures.register('fig-agent-loop', (container, kit) => {
-  const cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 420 });
+  const cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 420,
+    ariaLabel: 'A four-node cycle — model, tool-use request, your machine running the tool, and tool result — with a pulse lapping the loop and an API-call counter until it exits to a final answer.' });
   const controls = kit.makeControls(container);
 
   const speed = kit.makeSlider(controls, {

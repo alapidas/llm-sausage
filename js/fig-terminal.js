@@ -1,9 +1,10 @@
 'use strict';
 /* fig-terminal — a miniature terminal that types a prompt to itself.
    Below the dark panel, an annotation lane tracks each keystroke:
-   key event -> raw-mode byte to the Node process -> screen redraw count. */
+   key event -> raw-mode byte to the CLI process -> screen redraw count. */
 Figures.register('fig-terminal', (container, kit) => {
-  const cv = kit.makeCanvas(container, { aspect: 0.62, maxHeight: 400 });
+  const cv = kit.makeCanvas(container, { aspect: 0.62, maxHeight: 400,
+    ariaLabel: 'A miniature terminal types a prompt to itself while a lane below counts each keystroke as a key event, a raw byte handed to the CLI process, and a running total of screen redraws that keeps climbing even while the spinner turns.' });
   const controls = kit.makeControls(container);
 
   const PROMPT = 'fix the failing test in auth.spec.ts';
@@ -151,7 +152,7 @@ Figures.register('fig-terminal', (container, kit) => {
     const boxY = laneTop + 16;
     const boxes = [
       { head: 'key event', val: lastKey ? lastKey.label : '—', fill: PAL.blueSoft,   stroke: PAL.blue },
-      { head: 'byte to node', val: lastKey ? lastKey.byte : '—', fill: PAL.purpleSoft, stroke: PAL.purple },
+      { head: 'byte to CLI', val: lastKey ? lastKey.byte : '—', fill: PAL.purpleSoft, stroke: PAL.purple },
       { head: 'screen redraws', val: String(redraws),               fill: PAL.orangeSoft, stroke: PAL.orange },
     ];
     ctx.textAlign = 'center';
@@ -185,7 +186,7 @@ Figures.register('fig-terminal', (container, kit) => {
   draw();
 
   kit.caption(container,
-    'In raw mode the terminal delivers each keystroke to the Node.js process as a byte, ' +
+    'In raw mode the terminal delivers each keystroke to the CLI process as a byte, ' +
     'and every character you see is the program repainting the screen with ANSI escape ' +
     'sequences — note how the redraw counter keeps climbing while the spinner turns.');
 

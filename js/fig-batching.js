@@ -4,7 +4,8 @@
 'use strict';
 
 Figures.register('fig-batching', (container, kit) => {
-  const cv = kit.makeCanvas(container, { aspect: 0.6, maxHeight: 400 });
+  const cv = kit.makeCanvas(container, { aspect: 0.6, maxHeight: 400,
+    ariaLabel: 'A timeline of continuous batching on one model server, where requests join and leave the batch at the granularity of a single token.' });
   const controls = kit.makeControls(container);
 
   let arrival = 2.0; // requests per second (animation time)
@@ -110,10 +111,11 @@ Figures.register('fig-batching', (container, kit) => {
     }
     ctx.fillText(sub, left, 32);
 
-    // clip to plot area
+    // clip to plot area (extended slightly above so the top slot's
+    // "you" label, drawn just above its bar, is not clipped)
     ctx.save();
     ctx.beginPath();
-    ctx.rect(left, topBar, plotW, plotH);
+    ctx.rect(left, topBar - 14, plotW, plotH + 14);
     ctx.clip();
 
     // gridlines: one per forward pass, labels every 10

@@ -2,7 +2,8 @@
 'use strict';
 
 Figures.register('fig-loadbalancer', (container, kit) => {
-  const cv = kit.makeCanvas(container, { aspect: 0.62, maxHeight: 380 });
+  const cv = kit.makeCanvas(container, { aspect: 0.62, maxHeight: 380,
+    ariaLabel: 'Requests streaming through an API gateway that authenticates and validates them before a load balancer spreads the survivors across a fleet of model servers.' });
   const controls = kit.makeControls(container);
 
   let rate = 6; // requests per second

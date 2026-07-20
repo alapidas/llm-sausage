@@ -3,9 +3,11 @@
    Hover/tap a token: arcs to every earlier token, thickness = weight.
    Three hand-designed pseudo-heads; weights are illustrative only. */
 Figures.register('fig-attention', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 340 });
+  const cv = kit.makeCanvas(container, { height: 340,
+    ariaLabel: 'Diagram of one attention head over a fixed sentence, showing which earlier words each token draws from as weighted arcs and bars.' });
   const ctx = cv.ctx;
   const canvas = cv.canvas;
+  canvas.tabIndex = 0;   /* keyboard-focusable so tokens can be stepped with arrows */
 
   const TOKENS = ['The', 'engineer', 'fixed', 'the', 'test', 'because', 'it', 'was', 'failing'];
   const N = TOKENS.length;
@@ -71,6 +73,7 @@ Figures.register('fig-attention', (container, kit) => {
   let head = 2;          /* start on the coreference head */
   let sel = 6;           /* start on "it" */
   let hover = -1;
+  let kbFocus = false;   /* true while the canvas has keyboard focus */
   let cycleT = 0;
   const disp = HEADS[head].W[sel].slice();
 
@@ -120,6 +123,14 @@ Figures.register('fig-attention', (container, kit) => {
         return;
       }
     }
+  }
+
+  /* ellipsize a token label to fit a shrunken chip (font stays >= 11px) */
+  function fitLabel(str, maxW) {
+    if (ctx.measureText(str).width <= maxW) return str;
+    let s = str;
+    while (s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+    return s + '…';
   }
 
   function draw() {
@@ -180,7 +191,7 @@ Figures.register('fig-attention', (container, kit) => {
         ctx.stroke();
       }
       ctx.fillStyle = j > sel ? PAL.faint : PAL.inkStrong;
-      ctx.fillText(TOKENS[j], b.x + b.w / 2, b.y + b.h / 2 + 0.5);
+      ctx.fillText(fitLabel(TOKENS[j], b.w - 6), b.x + b.w / 2, b.y + b.h / 2 + 0.5);
     }
 
     /* bar chart of weights below */
@@ -216,7 +227,9 @@ Figures.register('fig-attention', (container, kit) => {
 
   /* --- pointer interaction --- */
   function hitTest(p) {
-    if (!boxes.length || p.y < boxes[0].y - 16) return -1;
+    if (!boxes.length) return -1;
+    const b0 = boxes[0];
+    if (p.y < b0.y - 16 || p.y > b0.y + b0.h + 8) return -1;   /* keep the bar chart out of selection */
     for (let i = 0; i < N; i++) {
       const b = boxes[i];
       if (p.x >= b.x - 2 && p.x <= b.x + b.w + 2) return i;
@@ -226,14 +239,27 @@ Figures.register('fig-attention', (container, kit) => {
   function onPointer(ev) {
     const i = hitTest(cv.pointer(ev));
     hover = i;
+    canvas.style.cursor = i >= 0 ? 'pointer' : 'default';
     if (i >= 0) { sel = i; cycleT = 0; }
   }
   canvas.addEventListener('pointermove', onPointer);
   canvas.addEventListener('pointerdown', onPointer);
-  canvas.addEventListener('pointerleave', () => { hover = -1; cycleT = 0; });
+  canvas.addEventListener('pointerleave', () => { hover = -1; cycleT = 0; canvas.style.cursor = 'default'; });
+
+  /* keyboard: arrows step the selected token, pausing the auto-cycle while focused */
+  canvas.addEventListener('keydown', ev => {
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+      ev.preventDefault();
+      kbFocus = true;
+      sel = kit.clamp(sel + (ev.key === 'ArrowRight' ? 1 : -1), 0, N - 1);
+      cycleT = 0;
+    }
+  });
+  canvas.addEventListener('focus', () => { kbFocus = true; });
+  canvas.addEventListener('blur', () => { kbFocus = false; });
 
   const loop = kit.animLoop(dt => {
-    if (hover < 0) {
+    if (hover < 0 && !kbFocus) {
       cycleT += dt;
       if (cycleT > 2.6) {
         cycleT = 0;

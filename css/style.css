@@ -7,14 +7,17 @@
 :root {
   --ink: #3d4148;
   --ink-strong: #24272c;
-  --faint: #8b9198;
+  --faint: #6b727a;
   --grid: #e3e6ea;
   --bg: #ffffff;
   --blue: #4a90d9;
   --blue-dark: #2f6bb0;
   --orange: #e8833a;
+  --orange-dark: #b25e15;
   --green: #55a868;
+  --green-dark: #3f7d51;
   --red: #d1605e;
+  --red-dark: #b23b39;
   --purple: #8172b3;
   --yellow: #e0b13e;
   --teal: #4db6ac;
@@ -25,6 +28,8 @@
   --purple-soft: #e8e3f3;
   --gray-soft: #f2f3f5;
   --code-bg: #f4f5f7;
+  --border: #c9cdd3;      /* control/button borders */
+  --border-dark: #b9bfc6; /* slider thumb border */
   --measure: 43rem;      /* prose column */
   --measure-wide: 52rem; /* figure column */
 }
@@ -33,7 +38,10 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
 }
 
 body {
@@ -190,15 +198,22 @@ pre code { background: none; padding: 0; font-size: 1em; }
   max-width: var(--measure-wide);
   margin: 2.4rem auto 2.6rem;
   position: relative;
-  user-select: none;
-  -webkit-user-select: none;
+}
+
+/* Reserve height before canvas/controls/caption inject, to avoid layout shift. */
+.figure:empty {
+  aspect-ratio: 52 / 31;
 }
 
 .figure canvas {
   display: block;
   width: 100%;
   border-radius: 10px;
-  touch-action: none;
+  /* pan-y keeps vertical page scrolling working over tall canvases;
+     figure interactions are taps and DOM sliders, not vertical drags. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .fig-caption {
@@ -208,6 +223,8 @@ pre code { background: none; padding: 0; font-size: 1em; }
   color: var(--faint);
   font-size: 0.9rem;
   line-height: 1.5;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* ---------------- controls ---------------- */
@@ -249,7 +266,7 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   flex: 1;
-  height: 26px;
+  height: 44px; /* larger touch target; track stays 4px, thumb centered */
   background: transparent;
   margin: 0;
   cursor: pointer;
@@ -266,7 +283,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px; height: 18px;
   border-radius: 50%;
   background: #fff;
-  border: 1.5px solid #b9bfc6;
+  border: 1.5px solid var(--border-dark);
   box-shadow: 0 1px 3px rgba(0,0,0,0.18);
   margin-top: -7px;
 }
@@ -278,11 +295,21 @@ input[type="range"]::-moz-range-track {
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 16px; height: 16px;
+  width: 18px; height: 18px;
   border-radius: 50%;
   background: #fff;
-  border: 1.5px solid #b9bfc6;
+  border: 1.5px solid var(--border-dark);
   box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+}
+
+/* Focus indicator for restyled ranges (appearance:none drops the native ring). */
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 button.fig-btn {
@@ -290,7 +317,7 @@ button.fig-btn {
   font-size: 0.88rem;
   color: var(--ink);
   background: #fff;
-  border: 1px solid #c9cdd3;
+  border: 1px solid var(--border);
   border-radius: 7px;
   padding: 0.32rem 0.95rem;
   cursor: pointer;
@@ -300,6 +327,7 @@ button.fig-btn {
 button.fig-btn:hover { background: var(--gray-soft); }
 button.fig-btn:active { background: var(--grid); }
 button.fig-btn[disabled] { opacity: 0.45; cursor: default; }
+button.fig-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 label.fig-toggle {
   display: inline-flex;
@@ -309,18 +337,6 @@ label.fig-toggle {
   color: var(--ink);
   cursor: pointer;
 }
-
-.fig-input {
-  font: inherit;
-  font-size: 0.95rem;
-  padding: 0.45rem 0.7rem;
-  border: 1px solid #c9cdd3;
-  border-radius: 7px;
-  color: var(--ink-strong);
-  width: 100%;
-}
-
-.fig-input:focus { outline: 2px solid var(--blue-soft); border-color: var(--blue); }
 
 /* ---------------- footer ---------------- */
 
@@ -339,4 +355,18 @@ footer.end {
   header.hero { padding-top: 3rem; }
   header.hero h1 { font-size: 1.9rem; }
   h2 { font-size: 1.5rem; margin-top: 3.2rem; }
+}
+
+/* Below 360px, trim article padding so the figure container keeps close to
+   the SPEC's 320px minimum instead of shrinking to ~280px. */
+@media (max-width: 360px) {
+  article { padding-left: 0.75rem; padding-right: 0.75rem; }
+}
+
+/* ---------------- print ---------------- */
+
+@media print {
+  .controls,
+  .fig-motion { display: none; }
+  .figure { break-inside: avoid; page-break-inside: avoid; }
 }

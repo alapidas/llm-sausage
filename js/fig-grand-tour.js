@@ -4,7 +4,8 @@
 'use strict';
 
 Figures.register('fig-grand-tour', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 330 });
+  const cv = kit.makeCanvas(container, { height: 330,
+    ariaLabel: 'The full round trip from terminal through TLS tunnel, internet, gateway, and GPU pod and back as streamed tokens, then a faster second lap triggered by a tool call.' });
   const controls = kit.makeControls(container);
   const speed = kit.makeSlider(controls, {
     label: 'Speed', min: 0.3, max: 2.5, value: 1,
@@ -222,10 +223,11 @@ Figures.register('fig-grand-tour', (container, kit) => {
     ctx.textAlign = 'center';
     ctx.fillStyle = PAL.faint;
     const labY = yMid + termH / 2 + 16;
+    const narrow = w < 560;
     ctx.fillText('terminal', m + termW / 2, labY);
     ctx.fillText('TLS', tunC, labY);
     ctx.fillText('internet', hopX[1], labY);
-    ctx.fillText('gateway', gwC, labY);
+    ctx.fillText(narrow ? 'gw' : 'gateway', gwC, labY);
     ctx.fillText('GPU pod', xB + podW / 2, labY);
 
     /* ------- the request pulse ------- */

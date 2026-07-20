@@ -4,7 +4,8 @@
    shows its label and token count. The punchline is the near-invisible
    sliver that is your actual new message. */
 Figures.register('fig-context-assembly', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 224 });
+  const cv = kit.makeCanvas(container, { height: 224,
+    ariaLabel: 'A horizontal bar representing the model’s 200,000-token context window, stacked from the system prompt, tool definitions, project memory, and an ever-growing conversation history, with your new message as a barely visible green sliver at the end.' });
   const controls = kit.makeControls(container);
 
   const CAP = 200000;
@@ -135,6 +136,7 @@ Figures.register('fig-context-assembly', (container, kit) => {
 
   cv.canvas.addEventListener('pointermove', ev => {
     const next = hitTest(cv.pointer(ev));
+    cv.canvas.style.cursor = next >= 0 ? 'pointer' : 'default';
     if (next !== hover) { hover = next; draw(); }
   });
   cv.canvas.addEventListener('pointerdown', ev => {
@@ -142,6 +144,23 @@ Figures.register('fig-context-assembly', (container, kit) => {
     if (next !== hover) { hover = next; draw(); }
   });
   cv.canvas.addEventListener('pointerleave', () => {
+    if (hover !== -1) { hover = -1; draw(); }
+  });
+
+  /* keyboard: step the inspected segment with the arrow keys */
+  cv.canvas.tabIndex = 0;
+  cv.canvas.addEventListener('keydown', ev => {
+    const n = segments().length;
+    let next = hover;
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = hover < 0 ? 0 : Math.min(n - 1, hover + 1);
+    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = hover < 0 ? n - 1 : Math.max(0, hover - 1);
+    else if (ev.key === 'Home') next = 0;
+    else if (ev.key === 'End') next = n - 1;
+    else return;
+    ev.preventDefault();
+    if (next !== hover) { hover = next; draw(); }
+  });
+  cv.canvas.addEventListener('blur', () => {
     if (hover !== -1) { hover = -1; draw(); }
   });
 
@@ -157,5 +176,5 @@ Figures.register('fig-context-assembly', (container, kit) => {
   kit.caption(container,
     'Everything sent to the model on one request. The conversation history swells with ' +
     'every turn because tool results ride along too — while your new message, the green ' +
-    'sliver, never amounts to more than a few dozen tokens.');
+    'sliver, is typically just a few dozen tokens.');
 });

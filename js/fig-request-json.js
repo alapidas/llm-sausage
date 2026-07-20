@@ -32,7 +32,7 @@ Figures.register('fig-request-json', (container, kit) => {
     },
     messages: {
       accent: PAL.green, soft: PAL.greenSoft, title: '"messages"',
-      text: 'The whole conversation, replayed from the top on every call — the API remembers nothing. Turns strictly alternate user / assistant, and tool outputs ride inside user turns as tool_result content blocks: to the model, a shell command’s output is just something you said.',
+      text: 'The whole conversation, replayed from the top on every call — the API remembers nothing. Turns alternate user / assistant, and tool outputs ride inside user turns as tool_result content blocks: to the model, a shell command’s output is just something you said.',
     },
     tools: {
       accent: PAL.red, soft: PAL.redSoft, title: '"tools"',
@@ -47,7 +47,7 @@ Figures.register('fig-request-json', (container, kit) => {
   /* ---- panel ---- */
   const panel = document.createElement('div');
   panel.style.cssText =
-    'background:#f4f5f7;border-radius:10px;padding:0.9rem 0.6rem;' +
+    'background:' + PAL.graySoft + ';border-radius:10px;padding:0.9rem 0.6rem;' +
     'font-family:' + PAL.mono + ';font-size:0.78rem;line-height:1.65;' +
     'overflow-x:auto;color:' + PAL.ink + ';';
   container.appendChild(panel);
@@ -57,8 +57,13 @@ Figures.register('fig-request-json', (container, kit) => {
     d.style.cssText =
       'border-left:3px solid transparent;border-radius:6px;' +
       'padding:0.15rem 0.5rem;cursor:pointer;';
-    if (key) { d.dataset.key = key; d.tabIndex = 0; }
-    else d.style.cursor = 'default';
+    if (key) {
+      d.dataset.key = key;
+      d.tabIndex = 0;
+      d.setAttribute('role', 'button');
+      d.setAttribute('aria-pressed', 'false');
+      d.setAttribute('aria-label', 'Explain ' + PARTS[key].title);
+    } else d.style.cursor = 'default';
     panel.appendChild(d);
     return d;
   }
@@ -105,10 +110,10 @@ Figures.register('fig-request-json', (container, kit) => {
   line(msgs, [k('  "messages"'), p(': [')]);
   line(msgs, [p('    { '), k('"role"'), p(': '), s('"user"'), p(', '), k('"content"'), p(': '), s('"fix the failing test"'), p(' },')]);
   line(msgs, [p('    { '), k('"role"'), p(': '), s('"assistant"'), p(', '), k('"content"'), p(': [')]);
-  line(msgs, [p('        { '), k('"type"'), p(': '), s('"tool_use"'), p(', '), k('"name"'), p(': '), s('"Read"'), p(',')]);
-  line(msgs, [p('          '), k('"input"'), p(': { '), k('"file_path"'), p(': '), s('"utils.py"'), p(' } } ] },')]);
+  line(msgs, [p('        { '), k('"type"'), p(': '), s('"tool_use"'), p(', '), k('"id"'), p(': '), s('"toolu_01…"'), p(',')]);
+  line(msgs, [p('          '), k('"name"'), p(': '), s('"Read"'), p(', '), k('"input"'), p(': { '), k('"file_path"'), p(': '), s('"utils.py"'), p(' } } ] },')]);
   line(msgs, [p('    { '), k('"role"'), p(': '), s('"user"'), p(', '), k('"content"'), p(': [')]);
-  line(msgs, [p('        { '), k('"type"'), p(': '), s('"tool_result"'), p(',')]);
+  line(msgs, [p('        { '), k('"type"'), p(': '), s('"tool_result"'), p(', '), k('"tool_use_id"'), p(': '), s('"toolu_01…"'), p(',')]);
   line(msgs, [p('          '), k('"content"'), p(': '), s('"1  def slugify(s):…'), dim(' (…)'), s('"'), p(' } ] }')]);
   line(msgs, [p('  ],')]);
 
@@ -160,12 +165,27 @@ Figures.register('fig-request-json', (container, kit) => {
     }
   }
 
+  function updatePressed() {
+    for (const [id, el] of Object.entries(blocks)) {
+      el.setAttribute('aria-pressed', String(pinned === id));
+    }
+  }
+
+  function togglePin(id) {
+    pinned = (pinned === id) ? null : id;
+    updatePressed();
+    show(pinned);
+  }
+
   for (const [id, el] of Object.entries(blocks)) {
     el.addEventListener('pointerenter', () => show(id));
     el.addEventListener('pointerleave', () => show(pinned));
     el.addEventListener('focus', () => show(id));
     el.addEventListener('blur', () => show(pinned));
-    el.addEventListener('click', () => { pinned = (pinned === id) ? null : id; show(pinned ?? id); });
+    el.addEventListener('click', () => togglePin(id));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePin(id); }
+    });
   }
   show(null);
 

@@ -2,7 +2,8 @@
 /* fig-residual — three tokens riding their residual streams through an
    eight-layer stack; each sublayer reads the vector and adds a delta. */
 Figures.register('fig-residual', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 470 });
+  const cv = kit.makeCanvas(container, { height: 470,
+    ariaLabel: 'Diagram of three tokens rising through an eight-layer transformer stack, each sublayer adding a small correction to the residual stream.' });
   const ctx = cv.ctx;
 
   const L = 8;                 /* layers */

@@ -3,7 +3,8 @@
 'use strict';
 
 Figures.register('fig-toolloop', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 480 });
+  const cv = kit.makeCanvas(container, { height: 480,
+    ariaLabel: 'A sequence diagram of one conversational turn as several API round trips between you, the Claude Code CLI, and the model, with running API-call and token counts.' });
   const controls = kit.makeControls(container);
 
   /* lanes: 0 = You, 1 = Claude Code, 2 = API/model */

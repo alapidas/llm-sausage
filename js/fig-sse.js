@@ -3,7 +3,8 @@
 'use strict';
 
 Figures.register('fig-sse', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 350 });
+  const cv = kit.makeCanvas(container, { height: 350,
+    ariaLabel: 'Server-sent event frames descend a wire on the left while a terminal on the right accumulates their fragments into streaming text.' });
   const controls = kit.makeControls(container);
 
   /* --- the event script -------------------------------------------- */
@@ -21,9 +22,9 @@ Figures.register('fig-sse', (container, kit) => {
     { t: 'content_block_delta', kind: 'txt',  frag: '.',      gap: 0.4 },
     { t: 'content_block_stop',  kind: 'ctl',  gap: 0.55 },
     { t: 'content_block_start', kind: 'tool', note: 'tool_use: Read', gap: 0.7 },
-    { t: 'input_json_delta',    kind: 'json', frag: '{"file_path"', gap: 0.6 },
-    { t: 'input_json_delta',    kind: 'json', frag: ': "auth',      gap: 0.5 },
-    { t: 'input_json_delta',    kind: 'json', frag: '.spec.ts"}',   gap: 0.5 },
+    { t: 'content_block_delta', kind: 'json', frag: '{"file_path"', gap: 0.6 },
+    { t: 'content_block_delta', kind: 'json', frag: ': "auth',      gap: 0.5 },
+    { t: 'content_block_delta', kind: 'json', frag: '.spec.ts"}',   gap: 0.5 },
     { t: 'content_block_stop',  kind: 'ctl',  gap: 0.55 },
     { t: 'message_delta',       kind: 'meta', note: 'stop_reason: "tool_use"', gap: 0.65 },
     { t: 'message_stop',        kind: 'ctl',  gap: 0.6 },

@@ -3,7 +3,8 @@
    Temperature reshapes the bars; Sample draws from the distribution,
    appends the token, and moves to the next hand-made step. */
 Figures.register('fig-sampling', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 348 });
+  const cv = kit.makeCanvas(container, { height: 348,
+    ariaLabel: 'Bar chart of a softmax probability distribution over candidate next tokens, reshaped by a temperature slider and sampled by a random draw.' });
   const ctx = cv.ctx;
 
   /* hand-designed logits for four consecutive positions */
@@ -58,7 +59,9 @@ Figures.register('fig-sampling', (container, kit) => {
       if (u <= cum) { chosen = i; break; }
       chosen = i;
     }
-    anim = { phase: 'drop', t: 0, u: u, chosen: chosen };
+    /* freeze the distribution with the sample, so dragging Temperature mid-animation
+       cannot move the bars out from under the marker */
+    anim = { phase: 'drop', t: 0, u: u, chosen: chosen, d: d };
   });
 
   /* softmax at current temperature, plus the top-p mask */
@@ -123,7 +126,7 @@ Figures.register('fig-sampling', (container, kit) => {
       return;
     }
 
-    const d = dist();
+    const d = anim ? anim.d : dist();
     const cands = STEPS[stepIdx];
     const n = cands.length;
 

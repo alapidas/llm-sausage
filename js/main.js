@@ -23,14 +23,17 @@
 window.PAL = {
   ink:      '#3d4148',
   inkStrong:'#24272c',
-  faint:    '#8b9198',
+  faint:    '#6b727a',
   grid:     '#e3e6ea',
   bg:       '#ffffff',
   blue:     '#4a90d9',
   blueDark: '#2f6bb0',
   orange:   '#e8833a',
+  orangeDark: '#b25e15',
   green:    '#55a868',
+  greenDark: '#3f7d51',
   red:      '#d1605e',
+  redDark:  '#b23b39',
   purple:   '#8172b3',
   yellow:   '#e0b13e',
   teal:     '#4db6ac',
@@ -47,6 +50,7 @@ window.PAL = {
 /* ---------------- FigKit helpers ---------------- */
 window.FigKit = (() => {
   const kit = {};
+  let uid = 0;
 
   /* Easing */
   kit.ease = {
@@ -58,10 +62,13 @@ window.FigKit = (() => {
   kit.lerp = (a, b, t) => a + (b - a) * t;
 
   /* DPR-aware canvas that tracks its container's width.
-     opts: { aspect: h/w ratio (default 0.6), maxHeight, height (fixed CSS px) } */
+     opts: { aspect: h/w ratio (default 0.6), maxHeight, height (fixed CSS px),
+             ariaLabel: accessible name (falls back to caption text) } */
   kit.makeCanvas = (container, opts = {}) => {
     const aspect = opts.aspect ?? 0.6;
     const canvas = document.createElement('canvas');
+    canvas.setAttribute('role', 'img');
+    if (opts.ariaLabel) canvas.setAttribute('aria-label', opts.ariaLabel);
     container.appendChild(canvas);
     const ctx = canvas.getContext('2d');
     const cv = { canvas, ctx, w: 0, h: 0 };
@@ -70,7 +77,14 @@ window.FigKit = (() => {
 
     function size() {
       const w = container.clientWidth;
-      if (!w) return;
+      if (!w) {
+        /* container hidden / zero-width at init: clear the bitmap so the
+           default 300x150 canvas never paints garbled; ResizeObserver
+           re-runs size() once the container gains width. */
+        canvas.width = 0; canvas.height = 0;
+        cv.w = 0; cv.h = 0;
+        return;
+      }
       let h = opts.height ?? Math.round(w * aspect);
       if (opts.maxHeight) h = Math.min(h, opts.maxHeight);
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -95,20 +109,23 @@ window.FigKit = (() => {
 
   /* requestAnimationFrame loop with dt in seconds (clamped). */
   kit.animLoop = fn => {
-    let raf = null, last = 0, t = 0;
+    let raf = null, last = 0, t = 0, running = false;
     function frame(now) {
-      raf = requestAnimationFrame(frame);
       if (!last) last = now;
       let dt = (now - last) / 1000;
       last = now;
       if (dt > 0.1) dt = 0.1;
       t += dt;
-      fn(dt, t);
+      try { fn(dt, t); }
+      catch (e) { console.error(e); running = false; raf = null; return; }
+      /* re-arm only after the callback succeeds, and only if still running
+         (the callback may have called stop()). */
+      if (running) raf = requestAnimationFrame(frame);
     }
     return {
-      start() { if (raf == null) { last = 0; raf = requestAnimationFrame(frame); } },
-      stop()  { if (raf != null) { cancelAnimationFrame(raf); raf = null; } },
-      get running() { return raf != null; },
+      start() { if (!running) { running = true; last = 0; raf = requestAnimationFrame(frame); } },
+      stop()  { running = false; if (raf != null) { cancelAnimationFrame(raf); raf = null; } },
+      get running() { return running; },
     };
   };
 
@@ -124,19 +141,27 @@ window.FigKit = (() => {
   kit.makeSlider = (parent, opts) => {
     const wrap = document.createElement('div');
     wrap.className = 'control';
-    const lab = document.createElement('span');
-    lab.className = 'control-label';
-    lab.textContent = opts.label ?? '';
     const input = document.createElement('input');
     input.type = 'range';
+    input.id = 'fig-slider-' + (++uid);
     input.min = opts.min ?? 0;
     input.max = opts.max ?? 1;
     input.step = opts.step ?? 'any';
     input.value = opts.value ?? opts.min ?? 0;
+    const labelText = opts.label ?? '';
+    const lab = document.createElement('label');
+    lab.className = 'control-label';
+    lab.htmlFor = input.id;
+    lab.textContent = labelText;
+    if (labelText) input.setAttribute('aria-label', labelText);
     const val = document.createElement('span');
     val.className = 'control-value';
     const fmt = opts.format ?? (v => String(v));
-    const update = () => { val.textContent = fmt(parseFloat(input.value)); };
+    const update = () => {
+      const text = fmt(parseFloat(input.value));
+      val.textContent = text;
+      input.setAttribute('aria-valuetext', text);
+    };
     input.addEventListener('input', () => { update(); opts.onInput && opts.onInput(parseFloat(input.value)); });
     update();
     wrap.append(lab, input, val);
@@ -211,6 +236,18 @@ window.FigKit = (() => {
     p.className = 'fig-caption';
     p.innerHTML = html;
     container.appendChild(p);
+    /* Give any canvas an accessible name/description from the caption.
+       If the figure passed an ariaLabel, keep it as the name and let the
+       caption describe; otherwise use the caption text as the name. */
+    const cnv = container.querySelector('canvas[role="img"]');
+    if (cnv) {
+      if (!cnv.getAttribute('aria-label')) {
+        cnv.setAttribute('aria-label', p.textContent);
+      } else if (!cnv.getAttribute('aria-describedby')) {
+        if (!p.id) p.id = 'fig-caption-' + (++uid);
+        cnv.setAttribute('aria-describedby', p.id);
+      }
+    }
     return p;
   };
 
@@ -222,11 +259,39 @@ window.Figures = (() => {
   const registry = new Map();
 
   function register(id, setup) {
-    if (registry.has(id)) console.warn('duplicate figure id:', id);
+    if (registry.has(id)) { console.warn('duplicate figure id (keeping first):', id); return; }
     registry.set(id, setup);
   }
 
+  /* Inject a runtime Play/Pause control for a loop-returning figure.
+     Used under prefers-reduced-motion, where loops are not auto-started. */
+  function injectPlayPause(el, inst) {
+    const bar = document.createElement('div');
+    bar.className = 'controls fig-motion';
+    const btn = document.createElement('button');
+    btn.className = 'fig-btn';
+    btn.type = 'button';
+    btn.textContent = 'Play';
+    btn.setAttribute('aria-pressed', 'false');
+    btn.addEventListener('click', () => {
+      if (inst.running) {
+        inst.stop();
+        btn.textContent = 'Play';
+        btn.setAttribute('aria-pressed', 'false');
+      } else {
+        inst.start();
+        btn.textContent = 'Pause';
+        btn.setAttribute('aria-pressed', 'true');
+      }
+    });
+    bar.appendChild(btn);
+    el.appendChild(bar);
+  }
+
   function initAll() {
+    const reduceMotion = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     const io = new IntersectionObserver(entries => {
       for (const e of entries) {
         const inst = e.target.__figInstance;
@@ -245,7 +310,17 @@ window.Figures = (() => {
       try { inst = setup(el, window.FigKit) || {}; }
       catch (err) { console.error('figure "' + id + '" failed to init:', err); continue; }
       el.__figInstance = inst;
-      io.observe(el);
+
+      const isLoop = inst && typeof inst.start === 'function' && typeof inst.stop === 'function';
+      if (reduceMotion && isLoop) {
+        /* Do not auto-start. Render exactly one frame so the figure is not
+           blank, then pause and expose a manual Play/Pause affordance. */
+        injectPlayPause(el, inst);
+        inst.start();
+        requestAnimationFrame(() => inst.stop());
+      } else {
+        io.observe(el);
+      }
     }
   }
 
