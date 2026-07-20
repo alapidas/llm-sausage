@@ -232,6 +232,7 @@ Figures.register('fig-loadbalancer', (container, kit) => {
   kit.caption(container,
     'The front door of an inference service: the gateway authenticates and validates each ' +
     'request (red dots are refused), then a load balancer spreads the survivors across a ' +
-    'fleet of model servers. The orange dot is your request.');
+    'fleet of model servers. Each bar shows a server&rsquo;s current load, not a hard limit &mdash; ' +
+    'a busy fleet answers a little slower rather than turning requests away. The orange dot is your request.');
   return loop;
 });

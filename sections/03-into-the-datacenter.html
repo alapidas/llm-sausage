@@ -13,9 +13,11 @@
 
   <h3>A model too big for one chip</h3>
 
-  <p>Why does the request need a special "model server" at all, rather than any machine in the building? Because a frontier model is mostly one enormous block of numbers: its weights run to hundreds of gigabytes, far more than any single GPU (or other accelerator; we will use the terms interchangeably) can hold. So the model is <em>sharded</em> — sliced across a group of accelerators wired together with fast interconnects, and that whole group acts as one logical server. The single box labeled "model server" above really contains several chips, each holding its slice of the weights, all working in concert on every token generated for you.</p>
+  <p>Why does the request need a special "model server" at all, rather than any machine in the building? Because a frontier model is mostly one enormous block of numbers: its weights run to hundreds of gigabytes, far more than any single GPU (or other accelerator; we will use the terms interchangeably) can hold. So the model is <em>sharded</em> — sliced across a group of accelerators wired together with fast interconnects, and that whole group acts as one logical server. The diagram below unpacks the single box labeled "model server" above: it really contains several chips, each holding one slice, all working in concert on every token generated for you.</p>
 
-  <p>Those weights were loaded once, when the server started, and stay resident in accelerator memory permanently. This inverts the usual picture of a web service: here the model is far too heavy to move, so it never does: your few kilobytes of request travel to the weights, flow through them, and leave. The weights are the factory; your request is the workpiece.</p>
+  <div class="figure" id="fig-sharding"></div>
+
+  <p>Those weights were loaded once at startup and stay resident in accelerator memory permanently. This inverts the usual picture of a web service: the model is far too heavy to move, so it never does — your few kilobytes of request travel to the weights, flow through them, and leave. The weights are the factory; your request is the workpiece.</p>
 
   <h3>Sharing the assembly line</h3>
 

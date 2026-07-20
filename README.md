@@ -35,7 +35,9 @@ build.py          assembles index.html (and sitemap.xml) from the above
 sitemap.xml       generated sitemap (do not edit by hand)
 robots.txt        crawler directives + sitemap pointer
 og.png            1200×630 social-share card
+favicon.png       browser-tab icon (PNG fallback; an inline SVG is primary)
 SPEC.md           the contract each section/figure was written against
+LICENSE           MIT
 ```
 
 ## Rebuilding
