@@ -1,8 +1,14 @@
 'use strict';
 /* fig-sampling — real softmax over hand-designed logits.
    Temperature reshapes the bars; Sample draws from the distribution,
-   appends the token, and moves to the next hand-made step. */
+   appends the token, and moves to the next hand-made step.
+   Level-aware: novice keeps only the temperature slider and draws on its
+   own; deep exposes the temperature-scaled logits and the top-p cutoff. */
 Figures.register('fig-sampling', (container, kit) => {
+  const level = kit.level();
+  const isNovice = level === 'novice';
+  const isDeep = level === 'deep';
+
   const cv = kit.makeCanvas(container, { height: 348,
     ariaLabel: 'Bar chart of a softmax probability distribution over candidate next tokens, reshaped by a temperature slider and sampled by a random draw.' });
   const ctx = cv.ctx;
@@ -20,10 +26,13 @@ Figures.register('fig-sampling', (container, kit) => {
   ];
   const BASE_CONTEXT = 'The capital of France is';
   const TOP_P = 0.9;
+  const N_CAND = isNovice ? 6 : 10;   /* candidate rows shown */
+  function candsFor(idx) { return STEPS[idx].slice(0, N_CAND); }
 
   let stepIdx = 0;
   let appended = [];          /* sampled tokens so far */
   let done = false;
+  let autoT = 0;              /* novice: time toward the next self-run draw */
   /* anim: null | {phase:'drop'|'reveal', t, u, chosen} */
   let anim = null;
 
@@ -40,17 +49,28 @@ Figures.register('fig-sampling', (container, kit) => {
     format: v => v.toFixed(2),
     onInput: () => draw(),
   });
-  const topToggle = kit.makeToggle(controls, 'top-p = 0.9', false, () => draw());
-  const sampleBtn = kit.makeButton(controls, 'Sample', () => {
-    if (anim) return;
-    if (done) {
-      stepIdx = 0;
-      appended = [];
-      done = false;
-      sampleBtn.textContent = 'Sample';
-      draw();
-      return;
-    }
+  let topToggle = null;
+  let sampleBtn = null;
+  if (!isNovice) {
+    topToggle = kit.makeToggle(controls, 'top-p = 0.9', false, () => draw());
+    sampleBtn = kit.makeButton(controls, 'Sample', () => {
+      if (anim) return;
+      if (done) {
+        stepIdx = 0;
+        appended = [];
+        done = false;
+        sampleBtn.textContent = 'Sample';
+        draw();
+        return;
+      }
+      drawSample();
+    });
+  }
+
+  /* draw one token from the current distribution and start the fall animation.
+     Freeze the distribution with the sample so dragging Temperature mid-animation
+     cannot move the bars out from under the marker. */
+  function drawSample() {
     const d = dist();
     const u = Math.random();
     let cum = 0, chosen = 0;
@@ -59,15 +79,13 @@ Figures.register('fig-sampling', (container, kit) => {
       if (u <= cum) { chosen = i; break; }
       chosen = i;
     }
-    /* freeze the distribution with the sample, so dragging Temperature mid-animation
-       cannot move the bars out from under the marker */
     anim = { phase: 'drop', t: 0, u: u, chosen: chosen, d: d };
-  });
+  }
 
   /* softmax at current temperature, plus the top-p mask */
   function dist() {
     const T = tempSl.value;
-    const logits = STEPS[stepIdx].map(c => c[1]);
+    const logits = candsFor(stepIdx).map(c => c[1]);
     let m = -Infinity;
     for (const l of logits) m = Math.max(m, l / T);
     const e = logits.map(l => Math.exp(l / T - m));
@@ -75,7 +93,7 @@ Figures.register('fig-sampling', (container, kit) => {
     for (const x of e) s += x;
     const p = e.map(x => x / s);
     let keep = p.map(() => true);
-    if (topToggle.value) {
+    if (topToggle && topToggle.value) {
       const idx = p.map((v, i) => i).sort((a, b) => p[b] - p[a]);
       const kept = new Set();
       let cum = 0;
@@ -122,22 +140,28 @@ Figures.register('fig-sampling', (container, kit) => {
       ctx.fillStyle = PAL.faint;
       ctx.textAlign = 'center';
       ctx.fillText('…and each new token restarts the whole forward pass.', w / 2, h / 2);
-      ctx.fillText('Press Reset to start over.', w / 2, h / 2 + 22);
+      ctx.fillText(isNovice ? 'starting over…' : 'Press Reset to start over.', w / 2, h / 2 + 22);
       return;
     }
 
     const d = anim ? anim.d : dist();
-    const cands = STEPS[stepIdx];
+    const cands = candsFor(stepIdx);
     const n = cands.length;
 
     /* rows of horizontal bars */
     ctx.font = '11px ' + PAL.mono;
     let labW = 0;
     for (const c of cands) labW = Math.max(labW, ctx.measureText(label(c[0])).width);
-    const x0 = Math.min(14 + labW, 96);
+    const x0 = Math.min(14 + labW, 96) + (isDeep ? 26 : 0);
     const rowTop = 40;
     const rowH = (h - rowTop - 62) / n;
     const plotW = w - x0 - 48;
+    if (isDeep) {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = PAL.faint;
+      ctx.fillText('logit÷T', 8, rowTop - 5);
+    }
     for (let i = 0; i < n; i++) {
       const y = rowTop + i * rowH;
       const cy = y + rowH / 2;
@@ -159,6 +183,12 @@ Figures.register('fig-sampling', (container, kit) => {
       ctx.fillStyle = excluded ? rgba(PAL.faint, 0.55) : PAL.faint;
       const pct = d.p[i] * 100;
       ctx.fillText((pct >= 9.5 ? pct.toFixed(0) : pct.toFixed(1)) + '%', x0 + bw + 5, cy);
+      if (isDeep) {
+        const z = cands[i][1] / tempSl.value;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = excluded ? rgba(PAL.faint, 0.55) : PAL.faint;
+        ctx.fillText(z >= 10 ? z.toFixed(0) : z.toFixed(1), 8, cy);
+      }
     }
 
     /* cumulative bar */
@@ -168,7 +198,15 @@ Figures.register('fig-sampling', (container, kit) => {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = PAL.faint;
-    ctx.fillText('cumulative probability — the random draw lands here', x0, cbY - 7);
+    ctx.fillText(isNovice ? 'the weighted die lands somewhere along here'
+      : 'cumulative probability — the random draw lands here', x0, cbY - 7);
+    if (isDeep && topToggle && topToggle.value) {
+      let k = 0, sm = 0;
+      for (let i = 0; i < n; i++) { if (d.keep[i]) { k++; sm += d.p[i]; } }
+      ctx.textAlign = 'right';
+      ctx.fillText('top-p 0.90 keeps ' + k + ' (Σ' + sm.toFixed(2) + ')', x0 + plotW, cbY - 7);
+      ctx.textAlign = 'left';
+    }
     let cx = x0;
     for (let i = 0; i < n; i++) {
       const segW = d.sp[i] * plotW;
@@ -207,18 +245,27 @@ Figures.register('fig-sampling', (container, kit) => {
   }
 
   const loop = kit.animLoop(dt => {
+    if (isNovice && !anim) {
+      autoT += dt;
+      if (done) {
+        if (autoT > 1.8) { stepIdx = 0; appended = []; done = false; autoT = 0; }
+      } else if (autoT > 1.1) {
+        autoT = 0;
+        drawSample();
+      }
+    }
     if (anim) {
       anim.t += dt;
       if (anim.phase === 'drop' && anim.t >= 0.55) {
         anim.phase = 'reveal';
         anim.t = 0;
       } else if (anim.phase === 'reveal' && anim.t >= 0.9) {
-        appended.push(STEPS[stepIdx][anim.chosen][0]);
+        appended.push(candsFor(stepIdx)[anim.chosen][0]);
         stepIdx += 1;
         anim = null;
         if (stepIdx >= STEPS.length) {
           done = true;
-          sampleBtn.textContent = 'Reset';
+          if (sampleBtn) sampleBtn.textContent = 'Reset';
         }
       }
     }
@@ -227,9 +274,13 @@ Figures.register('fig-sampling', (container, kit) => {
 
   cv.onResize(draw);
   draw();
-  kit.caption(container,
-    'A genuine softmax over invented logits. Low temperature funnels nearly all probability to ' +
-    '“␣Paris”; high temperature spreads it thin. Top-p removes the grayed-out tail before sampling. ' +
-    'Each Sample press draws one token and the process starts over on the longer context.');
+  const cap = isNovice
+    ? 'The model’s scores for the next word, turned into odds. Low temperature funnels almost all the odds onto one word (“␣Paris”); high temperature spreads them out. Drag the slider and the figure keeps rolling its weighted die on its own, adding one word at a time.'
+    : isDeep
+      ? 'A genuine softmax over invented logits. The left column shows each logit divided by the temperature (logit÷T) — the values the softmax actually exponentiates — and the bars are the resulting probabilities. Toggle top-p to grey out the tail and read the cutoff (how many tokens it keeps and their mass); press Sample to draw one token and continue on the longer context.'
+      : 'A genuine softmax over invented logits. Low temperature funnels nearly all probability to ' +
+        '“␣Paris”; high temperature spreads it thin. Top-p removes the grayed-out tail before sampling. ' +
+        'Each Sample press draws one token and the process starts over on the longer context.';
+  kit.caption(container, cap);
   return loop;
 });

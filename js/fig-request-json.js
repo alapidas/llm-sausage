@@ -1,10 +1,121 @@
 /* fig-request-json — annotated, abbreviated Messages API request body.
    DOM-based (the figure is fundamentally about text). Hover/tap a
    top-level part to highlight it and read what it does; the annotation
-   box below has a fixed minimum height so the layout never jumps. */
+   box below has a fixed minimum height so the layout never jumps.
+
+   Level-aware: novice shows a plain-language "letter" with a few parts
+   and no jargon; mid is the standard annotated request; deep adds a
+   rough size (bytes / tokens) for every part and a total for the body. */
 'use strict';
 
 Figures.register('fig-request-json', (container, kit) => {
+  const level = kit.level();
+
+  /* ---------------- novice: a plain-language letter ---------------- */
+  if (level === 'novice') {
+    const NP = {
+      who: { title: 'Who should answer', accent: PAL.blue, soft: PAL.blueSoft,
+        text: 'The name of the exact helper you are writing to. Nothing else in the letter chooses it — this name is the whole choice.' },
+      proof: { title: 'Proof it is from you', accent: PAL.purple, soft: PAL.purpleSoft,
+        text: 'A secret label proving the letter came from your account, so that only you are charged for the reply. It is never shown to anyone else.' },
+      rules: { title: 'The standing rules', accent: PAL.orange, soft: PAL.orangeSoft,
+        text: 'Instructions the program always includes: how to behave, which tools it may use, and a little about your computer. They ride along with every letter.' },
+      talk: { title: 'The whole conversation', accent: PAL.green, soft: PAL.greenSoft,
+        text: 'Everything said so far — your messages and every reply — folded back in from the very top. The helper keeps no memory, so the entire conversation is sent again every single time.' },
+    };
+
+    const panel = document.createElement('div');
+    panel.style.cssText =
+      'background:' + PAL.graySoft + ';border-radius:10px;padding:0.9rem 0.6rem;' +
+      'font-family:' + PAL.sans + ';font-size:0.95rem;line-height:1.6;' +
+      'color:' + PAL.ink + ';';
+    container.appendChild(panel);
+
+    function nblock(key, lines) {
+      const d = document.createElement('div');
+      d.style.cssText =
+        'border-left:3px solid transparent;border-radius:6px;' +
+        'padding:0.35rem 0.6rem;margin:0.15rem 0;cursor:pointer;';
+      d.dataset.key = key;
+      d.tabIndex = 0;
+      d.setAttribute('role', 'button');
+      d.setAttribute('aria-label', 'Explain: ' + NP[key].title);
+      const head = document.createElement('div');
+      head.textContent = NP[key].title;
+      head.style.cssText = 'font-weight:650;color:' + PAL.inkStrong + ';';
+      d.appendChild(head);
+      for (const ln of lines) {
+        const s = document.createElement('div');
+        s.textContent = ln;
+        s.style.cssText = 'color:' + PAL.faint + ';font-size:0.88rem;';
+        d.appendChild(s);
+      }
+      panel.appendChild(d);
+      return d;
+    }
+
+    const blocks = {
+      who:   nblock('who',   ['To:  Claude, the coding helper']),
+      proof: nblock('proof', ['From:  your account   (secret)']),
+      rules: nblock('rules', ['Always:  be careful, use tools when needed, …']),
+      talk:  nblock('talk',  ['you:     fix the failing test',
+                              'Claude:  (reads your file utils.py)',
+                              'you:     (here is what the file says)']),
+    };
+
+    const info = document.createElement('div');
+    info.style.cssText =
+      'min-height:5.5em;margin-top:0.7rem;padding:0.7rem 0.9rem;' +
+      'border-radius:8px;background:' + PAL.graySoft + ';' +
+      'font-size:0.95rem;line-height:1.55;color:' + PAL.ink + ';' +
+      'border-left:3px solid ' + PAL.grid + ';';
+    container.appendChild(info);
+    const infoTitle = document.createElement('div');
+    infoTitle.style.cssText = 'font-weight:650;margin-bottom:0.2rem;color:' + PAL.inkStrong + ';';
+    const infoText = document.createElement('div');
+    info.append(infoTitle, infoText);
+
+    let pinned = null;
+    function nshow(key) {
+      for (const [id, el] of Object.entries(blocks)) {
+        const on = id === key;
+        el.style.background = on ? NP[id].soft : 'transparent';
+        el.style.borderLeftColor = on ? NP[id].accent : 'transparent';
+        el.setAttribute('aria-pressed', String(pinned === id));
+      }
+      if (key) {
+        infoTitle.textContent = NP[key].title;
+        infoText.textContent = NP[key].text;
+        info.style.borderLeftColor = NP[key].accent;
+      } else {
+        infoTitle.textContent = '';
+        infoText.textContent = 'Hover over or tap a part of the letter to see what it is for.';
+        info.style.borderLeftColor = PAL.grid;
+      }
+    }
+    function ntoggle(id) { pinned = (pinned === id) ? null : id; nshow(pinned); }
+    for (const [id, el] of Object.entries(blocks)) {
+      el.addEventListener('pointerenter', () => nshow(id));
+      el.addEventListener('pointerleave', () => nshow(pinned));
+      el.addEventListener('focus', () => nshow(id));
+      el.addEventListener('blur', () => nshow(pinned));
+      el.addEventListener('click', () => ntoggle(id));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ntoggle(id); }
+      });
+    }
+    nshow(null);
+
+    kit.caption(container,
+      'A letter to Claude, shortened to a few lines. Hover over or tap a part to see ' +
+      'what it is for. A real letter is far longer — most of it the conversation so far, ' +
+      'sent again from the top every time.');
+    return;
+  }
+
+  /* ---------------- mid + deep ---------------- */
+  const deep = level === 'deep';
+
   const C = {
     key:   PAL.blueDark,
     str:   PAL.ink,
@@ -42,6 +153,17 @@ Figures.register('fig-request-json', (container, kit) => {
       accent: PAL.yellow, soft: PAL.graySoft, title: '"stream": true',
       text: 'Asks for the reply as server-sent events over a connection held open for the whole generation, so tokens appear in your terminal as they are produced instead of after a long silence.',
     },
+  };
+
+  /* deep-only: a rough on-the-wire size for each top-level part */
+  const SIZES = {
+    headers:    '≈ 0.2 KB · sent once when the connection opens, not billed as input tokens',
+    model:      '31 bytes · ~10 tokens',
+    max_tokens: '5 bytes · ~3 tokens',
+    system:     '≈ 48 KB · ~12,000 tokens — re-sent in full on every call',
+    messages:   '≈ 40 KB · ~3,500 tokens, and growing with every turn',
+    tools:      '≈ 66 KB · ~6,000 tokens for a dozen schemas',
+    stream:     '4 bytes · turns the reply into an incremental stream',
   };
 
   /* ---- panel ---- */
@@ -130,6 +252,18 @@ Figures.register('fig-request-json', (container, kit) => {
 
   line(block(null), [p('}')]);
 
+  /* deep-only: a total for the whole body */
+  if (deep) {
+    const total = document.createElement('div');
+    total.style.cssText =
+      'margin-top:0.5rem;font-family:' + PAL.mono + ';font-size:0.72rem;' +
+      'color:' + PAL.faint + ';';
+    total.textContent =
+      'whole body in a working session ≈ 154 KB · ~21,500 input tokens ' +
+      '(system + tools + history dominate)';
+    container.appendChild(total);
+  }
+
   /* ---- annotation box (fixed min-height: no layout jumps) ---- */
   const info = document.createElement('div');
   info.style.cssText =
@@ -144,6 +278,15 @@ Figures.register('fig-request-json', (container, kit) => {
     ';font-family:' + PAL.mono + ';font-size:0.85rem;';
   const infoText = document.createElement('div');
   info.append(infoTitle, infoText);
+
+  /* deep-only: a size readout line inside the annotation box */
+  let infoSize = null;
+  if (deep) {
+    infoSize = document.createElement('div');
+    infoSize.style.cssText = 'margin-top:0.45rem;font-family:' + PAL.mono +
+      ';font-size:0.8rem;color:' + PAL.faint + ';';
+    info.appendChild(infoSize);
+  }
 
   const blocks = { headers: hdr, model: mdl, max_tokens: mx, system: sys, messages: msgs, tools: tls, stream: str };
   let pinned = null;
@@ -163,6 +306,7 @@ Figures.register('fig-request-json', (container, kit) => {
       infoText.textContent = 'Hover over or tap a part of the request — the headers, or any top-level field of the JSON body — to see what it does.';
       info.style.borderLeftColor = PAL.grid;
     }
+    if (deep && infoSize) infoSize.textContent = key ? SIZES[key] : '';
   }
 
   function updatePressed() {
@@ -189,7 +333,14 @@ Figures.register('fig-request-json', (container, kit) => {
   }
   show(null);
 
-  kit.caption(container,
-    'An abbreviated Messages API request. Click a section to pin its explanation. ' +
-    'In a working session the system prompt, history, and tool schemas run to hundreds of kilobytes.');
+  if (deep) {
+    kit.caption(container,
+      'An abbreviated Messages API request; each part also reports its rough size. ' +
+      'Click a section to pin its explanation. In a working session the system prompt, ' +
+      'tool schemas, and history dominate a body of roughly 150 kilobytes.');
+  } else {
+    kit.caption(container,
+      'An abbreviated Messages API request. Click a section to pin its explanation. ' +
+      'In a working session the system prompt, history, and tool schemas run to hundreds of kilobytes.');
+  }
 });

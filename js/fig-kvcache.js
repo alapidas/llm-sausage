@@ -1,8 +1,14 @@
 'use strict';
 /* fig-kvcache — the KV cache growing one column per decode step,
-   versus the naive world that recomputes every column every step. */
+   versus the naive world that recomputes every column every step.
+   Level-aware: novice shows a single row of "notes" with one toggle and
+   runs on its own; deep adds the bytes-per-token formula and the arithmetic. */
 Figures.register('fig-kvcache', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 232,
+  const level = kit.level();
+  const isNovice = level === 'novice';
+  const isDeep = level === 'deep';
+
+  const cv = kit.makeCanvas(container, { height: isDeep ? 266 : 232,
     ariaLabel: 'Diagram of the key-value cache growing one column per decode step, compared with recomputing every column when the cache is disabled.' });
   const ctx = cv.ctx;
 
@@ -12,6 +18,7 @@ Figures.register('fig-kvcache', (container, kit) => {
   const MAXN = 26;                 /* columns before the run resets */
   const GROUPS = ['L 1–20', 'L 21–40', 'L 41–60', 'L 61–80'];
   const MB_PER_TOKEN = 0.3;        /* illustrative: K+V across ~80 layers */
+  const NOVICE_SPEED = 1.4;
 
   let n = PROMPT.length;           /* tokens (columns) so far */
   let acc = 0;                     /* time toward next step */
@@ -29,19 +36,24 @@ Figures.register('fig-kvcache', (container, kit) => {
   }
 
   const controls = kit.makeControls(container);
-  const playBtn = kit.makeButton(controls, 'Pause', () => {
-    playing = !playing;
-    playBtn.textContent = playing ? 'Pause' : 'Play';
-  });
-  const speedSl = kit.makeSlider(controls, {
-    label: 'Speed', min: 0.5, max: 4, step: 0.1, value: 1.4,
-    format: v => v.toFixed(1) + ' tok/s',
-  });
+  let speedSl = null;
+  if (!isNovice) {
+    const playBtn = kit.makeButton(controls, 'Pause', () => {
+      playing = !playing;
+      playBtn.textContent = playing ? 'Pause' : 'Play';
+    });
+    speedSl = kit.makeSlider(controls, {
+      label: 'Speed', min: 0.5, max: 4, step: 0.1, value: 1.4,
+      format: v => v.toFixed(1) + ' tok/s',
+    });
+  }
   kit.makeToggle(controls, 'use KV cache', true, v => {
     useCache = v;
     lastStep = useCache ? 1 : n;   /* keep the "this step" readout consistent with the new mode */
     draw();
   });
+
+  function speed() { return isNovice ? NOVICE_SPEED : speedSl.value; }
 
   function resetRun() {
     n = PROMPT.length;
@@ -61,7 +73,7 @@ Figures.register('fig-kvcache', (container, kit) => {
   function draw() {
     const w = cv.w, h = cv.h;
     ctx.clearRect(0, 0, w, h);
-    const phase = kit.clamp(acc * speedSl.value, 0, 1);  /* progress to next step */
+    const phase = kit.clamp(acc * speed(), 0, 1);  /* progress to next step */
     const left = 64;
     const gridW = w - left - 12;
     const colW = gridW / MAXN;
@@ -93,6 +105,53 @@ Figures.register('fig-kvcache', (container, kit) => {
       ctx.fillStyle = i < PROMPT.length ? PAL.faint : PAL.inkStrong;
       ctx.fillText(words[i], sx, 26);
       sx += ctx.measureText(words[i] + ' ').width;
+    }
+
+    if (isNovice) {
+      /* one plain row of "notes", one cell per word seen so far */
+      const gy = 66;
+      const rowH2 = 30;
+      ctx.font = '11px ' + PAL.sans;
+      ctx.fillStyle = PAL.faint;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(useCache ? 'notes the machine keeps about each word'
+        : 'redoing every note again, for every single word', left, gy - 8);
+      for (let i = 0; i < n; i++) {
+        const gx = left + i * colW;
+        const cw = Math.max(1, colW - 2);
+        if (!useCache) {
+          ctx.fillStyle = PAL.greenSoft;
+          ctx.fillRect(gx + 0.5, gy, cw, rowH2);
+          ctx.fillStyle = rgba(PAL.green, 0.7 * (1 - phase));
+          ctx.fillRect(gx + 0.5, gy, cw, rowH2);
+        } else {
+          ctx.fillStyle = PAL.blueSoft;
+          ctx.fillRect(gx + 0.5, gy, cw, rowH2);
+          if (i === n - 1) {
+            ctx.fillStyle = rgba(PAL.green, 0.9 * (1 - phase));
+            ctx.fillRect(gx + 0.5, gy, cw, rowH2);
+          }
+        }
+      }
+      ctx.strokeStyle = PAL.grid;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left, gy - 2, gridW, rowH2 + 4);
+
+      const ry0 = gy + rowH2 + 26;
+      ctx.font = '11px ' + PAL.sans;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = PAL.ink;
+      if (useCache) {
+        ctx.fillText('notes kept so far: ' + n, left, ry0);
+        ctx.fillStyle = PAL.greenDark;
+        ctx.fillText('this word added just one new note (green)', left, ry0 + 18);
+      } else {
+        ctx.fillText('notes redone this word: ' + n, left, ry0);
+        ctx.fillStyle = PAL.redDark;
+        ctx.fillText('every word redoes them all from scratch', left, ry0 + 18);
+      }
+      return;
     }
 
     /* the K/V grid */
@@ -173,12 +232,18 @@ Figures.register('fig-kvcache', (container, kit) => {
       ctx.fillStyle = PAL.faint;
       ctx.fillText('columns so far: ' + naiveCols + ' · cached: ' + cacheCols, left, ry0 + 34);
     }
+    if (isDeep) {
+      ctx.fillStyle = PAL.faint;
+      ctx.fillText('per token: 2 × 80 L × 8 kv-heads × 128 × 2 B ≈ 320 KB', left, ry0 + 51);
+      ctx.fillText('growth: ' + n + ' × 320 KB ≈ ' + (n * 320 / 1024).toFixed(1)
+        + ' MB · naive redoes Σ1..n = ' + naiveCols + ' cols', left, ry0 + 68);
+    }
   }
 
   const loop = kit.animLoop(dt => {
     if (playing) {
       acc += dt;
-      const interval = 1 / speedSl.value;
+      const interval = 1 / speed();
       if (acc >= interval) {
         acc -= interval;
         doStep();
@@ -189,9 +254,13 @@ Figures.register('fig-kvcache', (container, kit) => {
 
   cv.onResize(draw);
   draw();
-  kit.caption(container,
-    'Each decode step computes keys and values for one new column (green flash) and merely reads ' +
-    'the cached rest (yellow sweep), so the cache and its memory footprint grow linearly. ' +
-    'Untick “use KV cache” to watch every column get recomputed on every step. Sizes are illustrative.');
+  const cap = isNovice
+    ? 'The machine keeps one note about each word it has read (blue), and each new word adds just one more (green flash) instead of re-reading everything. Flip “use KV cache” off to watch it wastefully redo every note on every single word.'
+    : isDeep
+      ? 'Each decode step computes keys and values for one new column (green flash) and only reads the cached rest (yellow sweep), so the cache grows linearly. The readout gives the per-token size as 2 × layers × kv-heads × head-dim × bytes ≈ 320 KB and the running arithmetic against the naive Σ1..n recompute. Untick “use KV cache” to recompute every column each step. Sizes are illustrative.'
+      : 'Each decode step computes keys and values for one new column (green flash) and merely reads ' +
+        'the cached rest (yellow sweep), so the cache and its memory footprint grow linearly. ' +
+        'Untick “use KV cache” to watch every column get recomputed on every step. Sizes are illustrative.';
+  kit.caption(container, cap);
   return loop;
 });

@@ -1,25 +1,50 @@
 'use strict';
 /* fig-agent-loop — the agent cycle: model -> tool_use -> local execution
    -> tool_result -> model, with a pulse lapping the loop and an API-call
-   counter. After a few laps the pulse exits to a "final answer" node. */
+   counter. After a few laps the pulse exits to a "final answer" node.
+   Level-aware:
+     novice — plain-language nodes, a "round" counter, self-running (no
+              controls).
+     mid    — model (API) / tool_use / your machine / tool_result, Speed slider.
+     deep   — the mid figure plus edge block-type labels (tool_use /
+              tool_result), a live stop_reason readout, and an iteration
+              ceiling. */
 Figures.register('fig-agent-loop', (container, kit) => {
-  const cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 420,
-    ariaLabel: 'A four-node cycle — model, tool-use request, your machine running the tool, and tool result — with a pulse lapping the loop and an API-call counter until it exits to a final answer.' });
-  const controls = kit.makeControls(container);
+  const level = kit.level();
 
-  const speed = kit.makeSlider(controls, {
-    label: 'Speed', min: 0.4, max: 2.5, step: 0.1, value: 1,
-    format: v => v.toFixed(1) + '×',
-  });
+  const ariaLabel = level === 'novice'
+    ? 'A four-step loop — the model, asking to do something, your computer doing it, and the result going back — repeats until the model gives the final answer in the middle.'
+    : level === 'deep'
+    ? 'A four-node agent cycle — model, tool_use request, your machine running the tool, tool_result — with a lapping pulse, an API-call and iteration counter, and a stop_reason readout that reads tool_use while looping and end_turn when it exits to the final answer.'
+    : 'A four-node cycle — model, tool-use request, your machine running the tool, and tool result — with a pulse lapping the loop and an API-call counter until it exits to a final answer.';
+
+  const cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 420, ariaLabel });
+
+  let speed = null;
+  if (level !== 'novice') {
+    const controls = kit.makeControls(container);
+    speed = kit.makeSlider(controls, {
+      label: 'Speed', min: 0.4, max: 2.5, step: 0.1, value: 1,
+      format: v => v.toFixed(1) + '×',
+    });
+  }
+  const spd = () => speed ? speed.value : 1;
 
   const SEG_T = 0.9, DWELL_T = 0.45, LAPS = 4;
 
-  const NODES = [
-    { lines: ['model (API)'],                 fill: PAL.blueSoft,   stroke: PAL.blue,   mono: false },
-    { lines: ['tool_use', 'request'],         fill: PAL.purpleSoft, stroke: PAL.purple, mono: true  },
-    { lines: ['your machine', 'runs the tool'], fill: PAL.orangeSoft, stroke: PAL.orange, mono: false },
-    { lines: ['tool_result'],                 fill: PAL.bg,         stroke: PAL.teal,   mono: true  },
-  ];
+  const NODES = level === 'novice'
+    ? [
+        { lines: ['the model'],                fill: PAL.blueSoft,   stroke: PAL.blue,   mono: false },
+        { lines: ['asks to do', 'something'],  fill: PAL.purpleSoft, stroke: PAL.purple, mono: false },
+        { lines: ['your computer', 'does it'], fill: PAL.orangeSoft, stroke: PAL.orange, mono: false },
+        { lines: ['sends the', 'result back'], fill: PAL.bg,         stroke: PAL.teal,   mono: false },
+      ]
+    : [
+        { lines: ['model (API)'],                 fill: PAL.blueSoft,   stroke: PAL.blue,   mono: false },
+        { lines: ['tool_use', 'request'],         fill: PAL.purpleSoft, stroke: PAL.purple, mono: true  },
+        { lines: ['your machine', 'runs the tool'], fill: PAL.orangeSoft, stroke: PAL.orange, mono: false },
+        { lines: ['tool_result'],                 fill: PAL.bg,         stroke: PAL.teal,   mono: true  },
+      ];
   /* what travels on each segment (0: model->right, 1: right->bottom, ...) */
   const PULSE_COLOR = [PAL.purple, PAL.purple, PAL.teal, PAL.teal];
 
@@ -30,7 +55,7 @@ Figures.register('fig-agent-loop', (container, kit) => {
   reset();
 
   function advance(dt) {
-    st.t += dt * speed.value;
+    st.t += dt * spd();
     if (st.phase === 'dwell' && st.t > DWELL_T) {
       st.t = 0;
       if (st.node === 0 && st.apiCalls >= LAPS) st.phase = 'exit';
@@ -107,8 +132,31 @@ Figures.register('fig-agent-loop', (container, kit) => {
       drawBox(ctx, n, boxes[i], st.phase === 'dwell' && st.node === i);
     });
 
+    /* deep: label what rides each half of the loop */
+    if (level === 'deep') {
+      const labels = [
+        { seg: 0, t: 'tool_use',    c: PAL.purple },
+        { seg: 2, t: 'tool_result', c: PAL.teal },
+      ];
+      ctx.font = '11px ' + PAL.mono;
+      ctx.textAlign = 'center';
+      labels.forEach(L => {
+        const a = boxes[L.seg], b = boxes[(L.seg + 1) % 4];
+        const p = edgePoint(a, b.cx, b.cy), q = edgePoint(b, a.cx, a.cy);
+        const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+        const tw = ctx.measureText(L.t).width;
+        ctx.fillStyle = PAL.bg;                    /* halo for legibility */
+        ctx.fillRect(mx - tw / 2 - 3, my - 8, tw + 6, 15);
+        ctx.fillStyle = L.c;
+        ctx.fillText(L.t, mx, my + 3);
+      });
+    }
+
     /* final-answer node in the middle of the loop */
-    const finalSpec = { lines: ['final answer'], fill: PAL.greenSoft, stroke: PAL.green, mono: false };
+    const finalSpec = {
+      lines: [level === 'novice' ? 'the answer' : 'final answer'],
+      fill: PAL.greenSoft, stroke: PAL.green, mono: false,
+    };
     const fb = nodeBox(ctx, finalSpec, cx, cy);
     let fAlpha = 0;
     if (st.phase === 'hold') fAlpha = Math.min(1, st.t * 3);
@@ -138,22 +186,48 @@ Figures.register('fig-agent-loop', (container, kit) => {
 
     /* counter */
     ctx.textAlign = 'left';
-    ctx.font = '12px ' + PAL.mono;
-    ctx.fillStyle = PAL.ink;
-    ctx.fillText('API calls: ' + st.apiCalls, 8, 20);
-    ctx.font = '11px ' + PAL.sans;
-    ctx.fillStyle = PAL.faint;
-    ctx.fillText('one user prompt', 8, 36);
+    if (level === 'novice') {
+      ctx.font = '12px ' + PAL.sans;
+      ctx.fillStyle = PAL.ink;
+      ctx.fillText('round ' + st.apiCalls, 8, 20);
+      ctx.font = '11px ' + PAL.sans;
+      ctx.fillStyle = PAL.faint;
+      ctx.fillText('one question', 8, 36);
+    } else if (level === 'deep') {
+      ctx.font = '12px ' + PAL.mono;
+      ctx.fillStyle = PAL.ink;
+      ctx.fillText('API calls: ' + st.apiCalls, 8, 20);
+      const stopping = st.phase === 'exit' || st.phase === 'hold' || st.phase === 'fade';
+      ctx.fillStyle = stopping ? PAL.greenDark : PAL.purple;
+      ctx.fillText('stop_reason: ' + (stopping ? 'end_turn' : 'tool_use'), 8, 38);
+      ctx.font = '11px ' + PAL.sans;
+      ctx.fillStyle = PAL.faint;
+      ctx.fillText('one user prompt · max_iterations 25', 8, 54);
+    } else {
+      ctx.font = '12px ' + PAL.mono;
+      ctx.fillStyle = PAL.ink;
+      ctx.fillText('API calls: ' + st.apiCalls, 8, 20);
+      ctx.font = '11px ' + PAL.sans;
+      ctx.fillStyle = PAL.faint;
+      ctx.fillText('one user prompt', 8, 36);
+    }
   }
 
   const loop = kit.animLoop(dt => { advance(dt); draw(); });
   cv.onResize(draw);
   draw();
 
-  kit.caption(container,
-    'One prompt, many round trips: the model answers with tool_use requests, your ' +
-    'machine executes them and returns tool_result blocks, and the context is resent ' +
-    'each lap — until the model finally replies with plain text.');
+  const caption = level === 'novice'
+    ? 'One question can take several rounds: the model keeps asking your computer to ' +
+      'do things and reading the results, and only stops to answer once it has what it needs.'
+    : level === 'deep'
+    ? 'One prompt, many round trips. Each lap the model returns stop_reason: tool_use, ' +
+      'your machine runs the tool and returns a tool_result, and the whole context is ' +
+      'resent — until a turn comes back as end_turn, the plain-text final answer.'
+    : 'One prompt, many round trips: the model answers with tool_use requests, your ' +
+      'machine executes them and returns tool_result blocks, and the context is resent ' +
+      'each lap — until the model finally replies with plain text.';
+  kit.caption(container, caption);
 
   return loop;
 });

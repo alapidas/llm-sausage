@@ -4,6 +4,8 @@
 'use strict';
 
 Figures.register('fig-tokenizer', (container, kit) => {
+  var level = kit.level();
+
   /* Merge table, in rank order (rank = priority when encoding). */
   var MERGES = [
     [' ','t'],['h','e'],[' t','he'],['r','e'],[' ','a'],['i','n'],[' ','w'],
@@ -153,6 +155,11 @@ Figures.register('fig-tokenizer', (container, kit) => {
   input.autocomplete = 'off';
   input.style.fontFamily = PAL.mono;
   input.style.fontSize = '16px';
+  /* No .fig-input rule exists in the stylesheet, so the box would otherwise
+     take the browser's own field colors; anchor it to the palette so it
+     follows the theme like the token area below it. */
+  input.style.background = PAL.bg;
+  input.style.color = PAL.inkStrong;
   input.setAttribute('aria-label', 'Text to tokenize');
   container.appendChild(input);
 
@@ -173,33 +180,52 @@ Figures.register('fig-tokenizer', (container, kit) => {
     var text = input.value;
     var toks = tokenize(text);
     tokArea.textContent = '';
+    var nBytes = 0;
     for (var i = 0; i < toks.length; i++) {
       var sym = toks[i];
       var isByte = sym.charCodeAt(0) === 1;
+      if (isByte) nBytes++;
       var isSpace = /^[\s]+$/.test(sym);
       var pill = document.createElement('span');
-      pill.style.cssText =
+      /* Deep highlights byte-fallback pills so the reader can spot where
+         the vocabulary bottoms out to raw UTF-8 bytes. */
+      var bg = (level === 'deep' && isByte) ? PAL.redSoft
+             : (isByte || isSpace) ? PAL.graySoft
+                                   : PILL_COLORS[i % PILL_COLORS.length];
+      var pillCss =
         'display:inline-flex;flex-direction:column;align-items:center;' +
         'border-radius:6px;padding:3px 7px 2px;font-family:' + PAL.mono + ';' +
-        'background:' + (isByte || isSpace ? PAL.graySoft
-                                           : PILL_COLORS[i % PILL_COLORS.length]) + ';';
+        'background:' + bg + ';';
+      if (level === 'deep' && isByte) pillCss += 'outline:1px solid ' + PAL.red + ';';
+      pill.style.cssText = pillCss;
       var txt = document.createElement('span');
       txt.textContent = displayText(sym);
       txt.style.cssText = 'font-size:13px;line-height:1.3;white-space:pre;color:' +
         (isByte || isSpace ? PAL.faint : PAL.inkStrong) + ';';
-      var id = document.createElement('span');
-      id.textContent = String(tokenId(sym));
-      id.style.cssText = 'font-size:11px;line-height:1.2;color:' + PAL.faint + ';';
-      pill.append(txt, id);
+      pill.appendChild(txt);
+      /* Novice shows just the colored pieces — no integer ids. */
+      if (level !== 'novice') {
+        var id = document.createElement('span');
+        id.textContent = String(tokenId(sym));
+        id.style.cssText = 'font-size:11px;line-height:1.2;color:' + PAL.faint + ';';
+        pill.appendChild(id);
+      }
       tokArea.appendChild(pill);
     }
     var chars = Array.from(text).length;
     if (chars === 0) {
       stats.textContent = 'type something above';
+    } else if (level === 'novice') {
+      stats.textContent = toks.length + (toks.length === 1 ? ' piece' : ' pieces');
     } else {
-      stats.textContent = toks.length + (toks.length === 1 ? ' token' : ' tokens') +
+      var s = toks.length + (toks.length === 1 ? ' token' : ' tokens') +
         ' · ' + chars + ' characters · ' +
         (chars / toks.length).toFixed(1) + ' characters per token';
+      if (level === 'deep' && nBytes > 0) {
+        s += ' · ' + nBytes +
+          (nBytes === 1 ? ' byte-fallback token' : ' byte-fallback tokens');
+      }
+      stats.textContent = s;
     }
   }
 
@@ -209,21 +235,45 @@ Figures.register('fig-tokenizer', (container, kit) => {
     ['Code', 'function greet(name) { return "Hello, " + name; }'],
     ['Rare word + emoji', 'supercalifragilisticexpialidocious 🦆 café'],
   ];
-  PRESETS.forEach(function (p) {
-    kit.makeButton(controls, p[0], function () {
-      input.value = p[1];
+  if (level === 'novice') {
+    /* One control only: load a plain example sentence. */
+    kit.makeButton(controls, 'Example', function () {
+      input.value = PRESETS[0][1];
       render();
     });
-  });
+  } else {
+    PRESETS.forEach(function (p) {
+      kit.makeButton(controls, p[0], function () {
+        input.value = p[1];
+        render();
+      });
+    });
+  }
 
   input.addEventListener('input', render);
-  input.value = PRESETS[1][1];
+  input.value = level === 'novice' ? PRESETS[0][1]
+              : level === 'deep'   ? PRESETS[2][1]
+                                   : PRESETS[1][1];
   render();
 
-  kit.caption(container,
-    'A small but real byte-pair tokenizer running on your text. Common words ' +
-    'and code idioms are single tokens (␣ marks an attached space), rare ' +
-    'words split into pieces, and anything beyond ASCII falls back to raw bytes.');
+  if (level === 'novice') {
+    kit.caption(container,
+      'Type a sentence and watch it split into tokens — the small pieces the ' +
+      'model reads. Common words stay whole, and rarer words break into ' +
+      'several pieces (␣ marks a space kept with its piece).');
+  } else if (level === 'deep') {
+    kit.caption(container,
+      'A small but real byte-pair tokenizer running on your text. Common words ' +
+      'and code idioms are single tokens (␣ marks an attached space) and rare ' +
+      'words split into pieces. Red pills are byte-fallback tokens — anything ' +
+      'beyond ASCII decomposes into raw UTF-8 bytes shown as 0xNN — and the ' +
+      'readout gives the characters-per-token ratio and the byte-fallback count.');
+  } else {
+    kit.caption(container,
+      'A small but real byte-pair tokenizer running on your text. Common words ' +
+      'and code idioms are single tokens (␣ marks an attached space), rare ' +
+      'words split into pieces, and anything beyond ASCII falls back to raw bytes.');
+  }
 
   return {};
 });

@@ -1,11 +1,222 @@
 /* fig-journey — a packet hops from your laptop to Anthropic's front end.
    Every middlebox reads only the IP header; the payload is TLS ciphertext.
    A slider scales the geographic distance (same city ↔ across an ocean),
-   and a counter accumulates per-hop latency with light-in-fiber as floor. */
+   and a counter accumulates per-hop latency with light-in-fiber as floor.
+
+   Level-aware: novice shows a short route of plainly-named machines that
+   can read only the address; mid is the standard seven-hop journey; deep
+   adds a decrementing TTL on the packet and a per-hop latency bar with the
+   cumulative one-way and round-trip totals. */
 'use strict';
 
 Figures.register('fig-journey', (container, kit) => {
-  const cv = kit.makeCanvas(container, { height: 380,
+  const level = kit.level();
+
+  /* ---------------- novice: a sealed letter hops toward Claude ---------------- */
+  if (level === 'novice') {
+    const cv = kit.makeCanvas(container, { height: 320,
+      ariaLabel: 'A sealed message hopping from your laptop, through machines that can read only its address, to Claude.' });
+    const ctx = cv.ctx;
+    const controls = kit.makeControls(container);
+
+    const NODES = [
+      { label: 'your laptop', type: 'laptop',
+        note: 'Your own machine. It seals the message before it leaves, and only Claude can unseal it at the far end.' },
+      { label: 'your router', type: 'router',
+        note: 'The box in your home. It reads the address on the outside to know where to pass the message next — but it cannot read what is sealed inside.' },
+      { label: 'the internet', type: 'router',
+        note: 'One of many machines that pass the message along. Each sees only the address, never the sealed contents.' },
+      { label: 'the internet', type: 'router',
+        note: 'Another machine far away. Most of the wait is simply the message travelling the long distance between machines like these.' },
+      { label: "Claude's front door", type: 'fe',
+        note: 'The far end. Only here is the message unsealed and read.' },
+    ];
+
+    let distKm = 1200;
+    kit.makeSlider(controls, {
+      label: 'Distance',
+      min: 20, max: 9000, step: 20, value: distKm,
+      format: v => v < 120 ? 'same city' : v < 1600 ? 'same country' : v < 5000 ? 'across a continent' : 'across an ocean',
+      onInput: v => { distKm = v; draw(); },
+    });
+
+    function hopLats() { const geo = distKm / 200; return [2, geo * 0.5, geo * 0.5, 2]; }
+
+    let hop = 0, prog = 0, arrived = false, holding = 0;
+    let hover = -1, nodePos = [];
+
+    function layout() {
+      const w = cv.w;
+      const m = Math.max(34, w * 0.07);
+      const pathY = 96;
+      const wave = [12, -12, 12, -12, 12];
+      nodePos = NODES.map((n, i) => ({
+        x: m + (w - 2 * m) * i / (NODES.length - 1),
+        y: pathY + wave[i],
+        up: wave[i] < 0,
+      }));
+    }
+
+    function wrapText(text, x, y, maxW, lineH) {
+      const words = text.split(' ');
+      let lineTxt = '';
+      for (const word of words) {
+        const test = lineTxt ? lineTxt + ' ' + word : word;
+        if (ctx.measureText(test).width > maxW && lineTxt) {
+          ctx.fillText(lineTxt, x, y); y += lineH; lineTxt = word;
+        } else lineTxt = test;
+      }
+      if (lineTxt) ctx.fillText(lineTxt, x, y);
+      return y;
+    }
+
+    function drawNode(nd, pos, hovered) {
+      const { x, y } = pos;
+      ctx.save();
+      ctx.lineWidth = 1.6;
+      if (nd.type === 'laptop') {
+        ctx.fillStyle = PAL.graySoft; ctx.strokeStyle = PAL.ink;
+        kit.roundedRect(ctx, x - 12, y - 13, 24, 16, 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - 16, y + 7); ctx.lineTo(x + 16, y + 7);
+        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+      } else if (nd.type === 'router') {
+        ctx.fillStyle = PAL.graySoft; ctx.strokeStyle = PAL.ink;
+        ctx.beginPath(); ctx.arc(x, y, 10.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = PAL.faint;
+        ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = PAL.orangeSoft; ctx.strokeStyle = PAL.orange;
+        kit.roundedRect(ctx, x - 14, y - 13, 28, 26, 5); ctx.fill(); ctx.stroke();
+      }
+      if (hovered) {
+        ctx.strokeStyle = PAL.blue; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.font = '12px ' + PAL.sans; ctx.textAlign = 'center';
+      ctx.fillStyle = hovered ? PAL.inkStrong : PAL.faint;
+      ctx.fillText(nd.label, x, pos.up ? y - 24 : y + 32);
+      ctx.restore();
+    }
+
+    function drawPacket(x, y) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = PAL.bg; ctx.strokeStyle = PAL.inkStrong; ctx.lineWidth = 1.4;
+      kit.roundedRect(ctx, -18, -12, 36, 24, 4); ctx.fill(); ctx.stroke();
+      /* flap = a sealed envelope */
+      ctx.strokeStyle = PAL.faint; ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.moveTo(-18, -12); ctx.lineTo(0, 2); ctx.lineTo(18, -12); ctx.stroke();
+      /* small lock */
+      ctx.strokeStyle = PAL.orange; ctx.fillStyle = PAL.orange; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(0, 5, 2.4, Math.PI, 0); ctx.stroke();
+      kit.roundedRect(ctx, -3.2, 5, 6.4, 5, 1.2); ctx.fill();
+      ctx.restore();
+    }
+
+    function draw() {
+      const w = cv.w, h = cv.h;
+      layout();
+      ctx.clearRect(0, 0, w, h);
+      const lats = hopLats();
+      const total = lats.reduce((a, b) => a + b, 0);
+
+      ctx.strokeStyle = PAL.grid; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      nodePos.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.stroke();
+      NODES.forEach((n, i) => drawNode(n, nodePos[i], i === hover));
+
+      if (!arrived) {
+        const a = nodePos[hop], b = nodePos[hop + 1];
+        drawPacket(kit.lerp(a.x, b.x, prog), kit.lerp(a.y, b.y, prog) - 26);
+      } else {
+        drawPacket(nodePos[NODES.length - 1].x, nodePos[NODES.length - 1].y - 28);
+      }
+
+      /* the sealed envelope, magnified */
+      const iy = 150, ix = Math.max(22, w * 0.05), iw = w - 2 * ix;
+      ctx.fillStyle = PAL.faint; ctx.font = '12px ' + PAL.sans; ctx.textAlign = 'left';
+      ctx.fillText('the message, up close:', ix, iy - 8);
+      kit.roundedRect(ctx, ix, iy, iw, 56, 8);
+      ctx.fillStyle = PAL.bg; ctx.fill();
+      ctx.strokeStyle = PAL.grid; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.save();
+      kit.roundedRect(ctx, ix, iy, iw, 56, 8); ctx.clip();
+      ctx.fillStyle = PAL.blueSoft; ctx.fillRect(ix, iy, iw, 26);
+      ctx.fillStyle = PAL.blueDark; ctx.font = '12px ' + PAL.sans;
+      ctx.fillText('address on the outside — anyone may read', ix + 12, iy + 17, iw - 24);
+      ctx.fillStyle = PAL.red; ctx.font = '600 12px ' + PAL.sans;
+      ctx.fillText('sealed inside — unreadable until Claude opens it', ix + 12, iy + 44, iw - 24);
+      ctx.restore();
+
+      /* plain-language delay + hint */
+      ctx.textAlign = 'left';
+      ctx.fillStyle = PAL.inkStrong; ctx.font = '600 12px ' + PAL.sans;
+      ctx.fillText(arrived
+        ? 'the trip takes about ' + Math.round(total) + ' ms each way'
+        : 'travelling…', ix, iy + 82);
+
+      const ny = iy + 104;
+      if (hover >= 0) {
+        ctx.fillStyle = PAL.inkStrong; ctx.font = '600 12px ' + PAL.sans;
+        ctx.fillText(NODES[hover].label, ix, ny);
+        ctx.fillStyle = PAL.ink; ctx.font = '12px ' + PAL.sans;
+        wrapText(NODES[hover].note, ix, ny + 18, iw, 17);
+      } else {
+        ctx.fillStyle = PAL.faint; ctx.font = 'italic 12px ' + PAL.sans;
+        wrapText('Tap any machine to see what it is allowed to read as the message passes through.',
+          ix, ny, iw, 17);
+      }
+    }
+
+    cv.onResize(draw);
+    const loop = kit.animLoop(dt => {
+      const lats = hopLats();
+      if (arrived) {
+        holding += dt;
+        if (holding > 2.2) { arrived = false; holding = 0; hop = 0; prog = 0; }
+      } else {
+        const dur = 0.35 + lats[hop] * 0.02;
+        prog += dt / dur;
+        if (prog >= 1) { prog = 0; hop++; if (hop >= lats.length) arrived = true; }
+      }
+      draw();
+    });
+
+    function pick(ev) {
+      const p = cv.pointer(ev);
+      let best = -1, bestD = 28 * 28;
+      nodePos.forEach((n, i) => {
+        const d = (p.x - n.x) ** 2 + (p.y - n.y) ** 2;
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      cv.canvas.style.cursor = best >= 0 ? 'pointer' : 'default';
+      if (best !== hover) { hover = best; draw(); }
+    }
+    cv.canvas.addEventListener('pointermove', pick);
+    cv.canvas.addEventListener('pointerdown', pick);
+    cv.canvas.addEventListener('pointerleave', () => { hover = -1; draw(); });
+    cv.canvas.tabIndex = 0;
+    cv.canvas.addEventListener('keydown', ev => {
+      if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') {
+        hover = hover < 0 ? 0 : Math.min(NODES.length - 1, hover + 1);
+        ev.preventDefault(); draw();
+      } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
+        hover = hover < 0 ? NODES.length - 1 : Math.max(0, hover - 1);
+        ev.preventDefault(); draw();
+      }
+    });
+
+    kit.caption(container,
+      'A sealed message hopping from your laptop toward Claude. Every machine along the way ' +
+      'reads only the address, never the sealed contents. Drag the slider from a nearby ' +
+      'destination to a faraway one to feel how much distance alone adds to the wait.');
+    return loop;
+  }
+
+  /* ---------------- mid + deep ---------------- */
+  const deep = level === 'deep';
+  const cv = kit.makeCanvas(container, { height: deep ? 470 : 380,
     ariaLabel: "A packet traveling from your laptop to Anthropic's front end, staying encrypted at every router until the far end of the TLS tunnel." });
   const ctx = cv.ctx;
   const controls = kit.makeControls(container);
@@ -152,6 +363,11 @@ Figures.register('fig-journey', (container, kit) => {
       ctx.fillStyle = PAL.orange; ctx.font = '600 11px ' + PAL.sans;
       ctx.textAlign = 'center';
       ctx.fillText('+' + lats[hop].toFixed(1) + ' ms', px, py - 18);
+      /* deep: the TTL field, decremented at every hop */
+      if (deep) {
+        ctx.fillStyle = PAL.faint; ctx.font = '11px ' + PAL.mono;
+        ctx.fillText('ttl ' + (64 - hop), px, py + 20);
+      }
     } else {
       drawPacketShape(nodePos[NODES.length - 1].x, nodePos[NODES.length - 1].y - 26);
     }
@@ -198,6 +414,30 @@ Figures.register('fig-journey', (container, kit) => {
       ctx.fillStyle = PAL.faint; ctx.font = 'italic 12px ' + PAL.sans;
       wrapText('Hover over or tap any node to see what it can read as the packet passes through.',
         14, ny, w - 28, 17);
+    }
+
+    /* deep: per-hop latency bar with cumulative one-way and round-trip totals */
+    if (deep) {
+      const bx = Math.max(20, w * 0.04), bw = w - 2 * bx, by = 336, bh = 20;
+      ctx.textAlign = 'left'; ctx.fillStyle = PAL.faint; ctx.font = '11px ' + PAL.sans;
+      ctx.fillText('per-hop latency, one way (distance dominates the long hops):', bx, by - 8);
+      const cols = [PAL.blueSoft, PAL.blueSoft, PAL.orangeSoft, PAL.orangeSoft, PAL.orangeSoft, PAL.purpleSoft];
+      const strokes = [PAL.blueDark, PAL.blueDark, PAL.orange, PAL.orange, PAL.orange, PAL.purple];
+      let acc = 0;
+      lats.forEach((L, i) => {
+        const x = bx + bw * acc / total, segw = Math.max(1, bw * L / total);
+        ctx.fillStyle = cols[i]; ctx.fillRect(x, by, segw, bh);
+        ctx.strokeStyle = strokes[i]; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, by + 0.5, segw - 1, bh - 1);
+        if (segw > 30) {
+          ctx.fillStyle = PAL.ink; ctx.font = '11px ' + PAL.mono; ctx.textAlign = 'center';
+          ctx.fillText(L.toFixed(1), x + segw / 2, by + 14, segw - 4);
+        }
+        acc += L;
+      });
+      ctx.textAlign = 'left'; ctx.font = '600 11px ' + PAL.mono; ctx.fillStyle = PAL.inkStrong;
+      ctx.fillText('Σ one way ≈ ' + total.toFixed(1) + ' ms   ·   round trip ≈ ' +
+        (2 * total).toFixed(0) + ' ms   ·   fiber floor ≈ ' + floorMs().toFixed(1) + ' ms',
+        bx, by + bh + 18, bw);
     }
   }
 
@@ -253,9 +493,17 @@ Figures.register('fig-journey', (container, kit) => {
     }
   });
 
-  kit.caption(container,
-    'A packet’s trip from your laptop to Anthropic’s front end. Every router forwards on the ' +
-    'IP header alone; the payload stays ciphertext until the far end of the TLS tunnel. ' +
-    'Drag the slider to see distance dominate the latency.');
+  if (deep) {
+    kit.caption(container,
+      'A packet’s trip from your laptop to Anthropic’s front end. Every router forwards on the ' +
+      'IP header alone, decrementing the TTL; the payload stays ciphertext until the far end of ' +
+      'the TLS tunnel. The bar below breaks the one-way latency down hop by hop — drag the ' +
+      'slider and watch distance swallow the total.');
+  } else {
+    kit.caption(container,
+      'A packet’s trip from your laptop to Anthropic’s front end. Every router forwards on the ' +
+      'IP header alone; the payload stays ciphertext until the far end of the TLS tunnel. ' +
+      'Drag the slider to see distance dominate the latency.');
+  }
   return loop;
 });

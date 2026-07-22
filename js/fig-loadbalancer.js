@@ -2,21 +2,33 @@
 'use strict';
 
 Figures.register('fig-loadbalancer', (container, kit) => {
+  const level = kit.level();
+  const NOVICE = level === 'novice';
+  const DEEP = level === 'deep';
+
+  const ARIA = NOVICE
+    ? 'Requests arriving as dots that pause at a front desk to be checked — some are turned away — before being sent to whichever helper computer has a free hand.'
+    : (DEEP
+      ? 'Requests streaming through an API gateway that authenticates and validates them before a load balancer spreads the survivors across a fleet of model servers, each server showing its queue depth and health, with a draining server pulled from rotation.'
+      : 'Requests streaming through an API gateway that authenticates and validates them before a load balancer spreads the survivors across a fleet of model servers.');
+
   const cv = kit.makeCanvas(container, { aspect: 0.62, maxHeight: 380,
-    ariaLabel: 'Requests streaming through an API gateway that authenticates and validates them before a load balancer spreads the survivors across a fleet of model servers.' });
-  const controls = kit.makeControls(container);
+    ariaLabel: ARIA });
 
-  let rate = 6; // requests per second
-  kit.makeSlider(controls, {
-    label: 'Incoming requests', min: 2, max: 22, step: 1, value: rate,
-    format: v => v.toFixed(0) + '/s',
-    onInput: v => { rate = v; },
-  });
+  let rate = NOVICE ? 3 : 6; // requests per second
+  if (!NOVICE) {
+    const controls = kit.makeControls(container);
+    kit.makeSlider(controls, {
+      label: 'Incoming requests', min: 2, max: 22, step: 1, value: rate,
+      format: v => v.toFixed(0) + '/s',
+      onInput: v => { rate = v; },
+    });
+  }
 
-  const NSERV = 6;
+  const NSERV = NOVICE ? 3 : 6;
   const CAPACITY = 8;             // jobs per server before the bar is "full"
   const servers = [];
-  for (let i = 0; i < NSERV; i++) servers.push({ jobs: [] }); // jobs = remaining seconds
+  for (let i = 0; i < NSERV; i++) servers.push({ jobs: [], health: 'up', healthT: 0 }); // jobs = remaining seconds
   const dots = [];
   const COLORS = [PAL.blue, PAL.green, PAL.purple, PAL.teal, PAL.yellow, PAL.blueDark];
   let colorIdx = 0;
@@ -24,6 +36,7 @@ Figures.register('fig-loadbalancer', (container, kit) => {
   let mineTimer = 1.2;            // countdown to spawn "your" orange request
   let mineAlive = false;
   let nRouted = 0, nRefused = 0;
+  let drainAcc = 0;              // deep: time since last replica pulled from rotation
 
   const D_APPROACH = 1.0, D_CHECK = 0.28, D_ROUTE = 0.75, D_REJECT = 0.7;
 
@@ -46,6 +59,17 @@ Figures.register('fig-loadbalancer', (container, kit) => {
   function serverY(L, i) { return L.top + i * (L.sh + L.gap) + L.sh / 2; }
 
   function pickServer() {
+    if (DEEP) {
+      // load balancer skips replicas that fail their readiness check
+      const up = [];
+      for (let i = 0; i < NSERV; i++) if (servers[i].health === 'up') up.push(i);
+      if (up.length >= 2) {
+        const a = up[Math.floor(Math.random() * up.length)];
+        let b = up[Math.floor(Math.random() * up.length)];
+        if (b === a) b = up[(up.indexOf(a) + 1) % up.length];
+        return servers[a].jobs.length <= servers[b].jobs.length ? a : b;
+      } else if (up.length === 1) return up[0];
+    }
     // power of two choices: sample two servers, take the less loaded one
     const a = Math.floor(Math.random() * NSERV);
     let b = Math.floor(Math.random() * NSERV);
@@ -93,6 +117,25 @@ Figures.register('fig-loadbalancer', (container, kit) => {
       for (let j = s.jobs.length - 1; j >= 0; j--) {
         s.jobs[j] -= dt;
         if (s.jobs[j] <= 0) s.jobs.splice(j, 1);
+      }
+    }
+    if (DEEP) {
+      // occasionally pull a healthy replica out of rotation; it drains, then
+      // its readiness check passes again and it rejoins the pool
+      for (const s of servers) {
+        if (s.health === 'drain') {
+          s.healthT -= dt;
+          if (s.healthT <= 0 && s.jobs.length === 0) s.health = 'up';
+        }
+      }
+      drainAcc += dt;
+      if (drainAcc > 5) {
+        drainAcc = 0;
+        const up = servers.filter(s => s.health === 'up');
+        if (up.length > 1) {
+          const s = up[Math.floor(Math.random() * up.length)];
+          s.health = 'drain'; s.healthT = 2.6;
+        }
       }
     }
   }
@@ -145,12 +188,17 @@ Figures.register('fig-loadbalancer', (container, kit) => {
     ctx.fillStyle = PAL.ink;
     ctx.font = '600 12px ' + PAL.sans;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('gateway', gw.x, gw.y - (L.narrow ? 0 : 22));
+    ctx.fillText(NOVICE ? 'front desk' : 'gateway', gw.x, gw.y - (L.narrow ? 0 : 22));
     if (!L.narrow) {
       ctx.fillStyle = PAL.faint;
       ctx.font = '11px ' + PAL.sans;
-      ctx.fillText('auth · limits', gw.x, gw.y + 2);
-      ctx.fillText('validate · route', gw.x, gw.y + 18);
+      if (NOVICE) {
+        ctx.fillText('checks your', gw.x, gw.y + 2);
+        ctx.fillText('request', gw.x, gw.y + 18);
+      } else {
+        ctx.fillText('auth · limits', gw.x, gw.y + 2);
+        ctx.fillText('validate · route', gw.x, gw.y + 18);
+      }
     }
 
     // checkpoint dashed line at gateway entrance
@@ -165,9 +213,10 @@ Figures.register('fig-loadbalancer', (container, kit) => {
     // servers with load bars
     for (let i = 0; i < NSERV; i++) {
       const y = serverY(L, i) - L.sh / 2;
+      const drain = DEEP && servers[i].health === 'drain';
       kit.roundedRect(ctx, L.sx, y, L.sw, L.sh, 6);
       ctx.fillStyle = PAL.bg; ctx.fill();
-      ctx.strokeStyle = PAL.faint; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.strokeStyle = drain ? PAL.red : PAL.faint; ctx.lineWidth = 1.2; ctx.stroke();
       const load = kit.clamp(servers[i].jobs.length / CAPACITY, 0, 1);
       const barW = L.sw - 12, barH = 5;
       const bx = L.sx + 6, by = y + L.sh - barH - 5;
@@ -182,7 +231,14 @@ Figures.register('fig-loadbalancer', (container, kit) => {
         ctx.fillStyle = PAL.faint;
         ctx.font = '11px ' + PAL.mono;
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-        ctx.fillText(L.narrow ? 's' + (i + 1) : 'server ' + (i + 1), bx, y + 13);
+        ctx.fillText(NOVICE ? (L.narrow ? 'h' + (i + 1) : 'helper ' + (i + 1))
+                            : (L.narrow ? 's' + (i + 1) : 'server ' + (i + 1)), bx, y + 13);
+        if (DEEP) {
+          ctx.textAlign = 'right';
+          ctx.fillStyle = drain ? PAL.redDark : PAL.faint;
+          ctx.fillText(drain ? 'drain' : 'q' + servers[i].jobs.length, L.sx + L.sw - 6, y + 13);
+          ctx.textAlign = 'left';
+        }
       }
     }
 
@@ -224,15 +280,26 @@ Figures.register('fig-loadbalancer', (container, kit) => {
     ctx.fillStyle = PAL.faint;
     ctx.font = '11px ' + PAL.mono;
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText('routed ' + nRouted + '   refused ' + nRefused, 8, 16);
+    ctx.fillText(NOVICE
+      ? 'sent on ' + nRouted + '   turned away ' + nRefused
+      : 'routed ' + nRouted + '   refused ' + nRefused, 8, 16);
   }
 
   cv.onResize(draw);
   const loop = kit.animLoop(dt => { step(dt); draw(); });
-  kit.caption(container,
-    'The front door of an inference service: the gateway authenticates and validates each ' +
-    'request (red dots are refused), then a load balancer spreads the survivors across a ' +
-    'fleet of model servers. Each bar shows a server&rsquo;s current load, not a hard limit &mdash; ' +
-    'a busy fleet answers a little slower rather than turning requests away. The orange dot is your request.');
+  const CAP = NOVICE
+    ? 'The front desk checks every request as it arrives — a red dot is turned away — then sends ' +
+      'the rest to whichever helper computer has a free hand. The orange dot is your request.'
+    : (DEEP
+      ? 'The front door of an inference service: the gateway authenticates and validates each ' +
+        'request (red dots are refused), then a load balancer spreads the survivors across a ' +
+        'fleet of model servers. Each server shows its queue depth (q&hairsp;N) and its health &mdash; ' +
+        'a replica that fails its readiness check is marked <em>drain</em>, pulled from rotation, and ' +
+        'rejoins once its queue empties. The orange dot is your request.'
+      : 'The front door of an inference service: the gateway authenticates and validates each ' +
+        'request (red dots are refused), then a load balancer spreads the survivors across a ' +
+        'fleet of model servers. Each bar shows a server&rsquo;s current load, not a hard limit &mdash; ' +
+        'a busy fleet answers a little slower rather than turning requests away. The orange dot is your request.');
+  kit.caption(container, CAP);
   return loop;
 });

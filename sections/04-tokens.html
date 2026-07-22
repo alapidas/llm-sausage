@@ -1,29 +1,93 @@
 <section id="tokens">
   <h2>Tokens</h2>
 
-  <p>The request has cleared the routing layers and reached a machine that holds the model's weights. What it carries is still just text — your prompt, the conversation so far, the tool definitions, all of it one long string of bytes. A neural network cannot do anything with a string of bytes directly. It computes with numbers, so before anything else happens the text is translated: it is cut into <em>tokens</em>, and each token is exchanged for an integer.</p>
+  <div class="lv lv-novice">
+    <p>The message you sent is, to the computer, just text. But the model does not think in letters; it thinks in numbers, so your text is chopped into small pieces, each swapped for a number.</p>
 
-  <p>A token is not a character, and it is not quite a word. It is an entry in a fixed vocabulary of text fragments — modern models use vocabularies on the order of a hundred thousand entries or more. Common words are single tokens. So are common prefixes and endings, frequent letter pairs, punctuation runs, and — perhaps surprisingly — words with a leading space attached: <code>the</code> and <code>␣the</code> are two different entries, because inside running text a word almost always arrives with the space that precedes it. Rare words don't get an entry of their own; they are assembled from several smaller pieces. In the demonstration below you can type any text and watch it split. Each colored pill is one token, with its integer id underneath, and the <code>␣</code> marks show where a space belongs to the token itself:</p>
+    <p>Those pieces are tokens. A token is a chunk of text — a short word like <code>the</code>, part of a longer word, or a single letter or mark. Think of them as LEGO bricks: common words get their own brick, rare words are built from several, and a word keeps the space in front of it.</p>
+
+    <p>In the demonstration below you can type anything and watch it break apart, each colored pill one token.</p>
+  </div>
+
+  <div class="lv lv-mid">
+    <p>The request has cleared the routing layers and reached a machine holding the model's weights, but what it carries is still just text — your prompt, the conversation, the tool definitions, one long string of bytes. A neural network computes with numbers, not bytes, so the text is first cut into <em>tokens</em>, each exchanged for an integer.</p>
+
+    <p>A token is not a character, and not quite a word. It is an entry in a fixed vocabulary of text fragments, roughly a hundred thousand of them. Common words are single tokens, as are frequent prefixes, endings, letter pairs, and — perhaps surprisingly — words with a leading space attached: <code>the</code> and <code>␣the</code> are different entries, because in running text a word almost always arrives with the space before it. Rare words get no entry and are built from smaller pieces. In the demonstration below you can type any text and watch it split, each pill one token with its integer id underneath and <code>␣</code> marking where a space belongs to the token itself:</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p>By the time the request lands on a weight-holding host it is still a byte string — a UTF-8-encoded prompt, conversation history, and tool schemas, concatenated. The network computes over real-valued vectors, so this must first become a sequence of integer token ids: pure bookkeeping, deterministic and frozen for the model's life.</p>
+
+    <p>Production tokenizers are byte-level: their atomic units are the 256 byte values, not Unicode code points, which lets them represent any input with no out-of-vocabulary case. But merges do not run across the raw stream. A pre-tokenization step, usually a regular expression, first slices the text into word-ish chunks — a leading space plus a run of letters, digits, punctuation, or a newline — and merges stay confined within each chunk. That boundary is why a word carries its preceding space (<code>␣the</code>) and why no merge bridges a letter run into punctuation.</p>
+
+    <p>In the demonstration below you can type any text and watch the split, each pill one token with its integer id beneath and <code>␣</code> marking an attached space; pills that hit the byte-fallback floor are outlined in red with their raw <code>0xNN</code> byte value, and the readout gives the characters-per-token ratio and byte-fallback count:</p>
+  </div>
 
   <div class="figure" id="fig-tokenizer"></div>
 
-  <p>A few things are worth noticing as you play with it. The code preset tokenizes remarkably economically: <code>function</code>, <code>return</code>, a run of indentation, the <code>();</code> at the end of a call — each is a single token, because tokenizers are trained on enormous amounts of source code and these sequences occur constantly. A long rare word shatters into many small fragments. Numbers shatter too, often digit by digit, which is one honest reason arithmetic is not a model's most natural skill. And the emoji becomes raw bytes: the vocabulary always keeps the 256 individual byte values as a floor, so any input whatsoever — any language, any binary junk — can be represented. There is no such thing as an unknown word, only a word that costs more tokens.</p>
+  <div class="lv lv-novice">
+    <p>Who chose which chunks get a brick? Nobody did. The model learned them by reading a huge pile of text and noticing which letters travel together: it starts with single letters, glues the most common pair into a new brick — in English, <code>t</code> next to <code>h</code> — then repeats thousands of times.</p>
 
-  <h3>Where the vocabulary comes from</h3>
+    <p>In the demonstration below this plays out by itself on a tiny sample, one gluing step at a time, so you can watch chunks like <code>th</code> and then <code>the</code> emerge. Press Replay to watch again.</p>
+  </div>
 
-  <p>Nobody sits down and chooses those hundred thousand fragments by hand. They are learned, with a procedure called <em>byte-pair encoding</em> that is almost embarrassingly simple. Start with a vocabulary of just the 256 possible bytes, so every text is a long sequence of single-byte tokens. Now scan a huge corpus of text and find the pair of adjacent tokens that occurs most often — in English that is something like <code>t</code> followed by <code>h</code>. Fuse that pair into a new token, add it to the vocabulary, and rewrite the corpus using it. Then repeat: find the most frequent adjacent pair in the rewritten corpus, fuse it, repeat again, on the order of a hundred thousand times. Frequent sequences condense into single tokens early; rare ones never do. In the demonstration below you can watch this play out on a tiny corpus, one merge at a time — notice how quickly <code>th</code>, <code>the</code>, and then <code>␣the</code> with its leading space crystallize out of the character soup:</p>
+  <div class="lv lv-mid">
+    <p>The code preset tokenizes economically — <code>function</code>, <code>return</code>, a run of indentation, the <code>();</code> ending a call are each a single token, because tokenizers train on vast amounts of source code where these recur. A rare word shatters into many fragments, numbers often digit by digit, one reason arithmetic is not a model's strong suit. The emoji becomes raw bytes: the vocabulary keeps the 256 byte values as a floor, so any input at all can be represented — no unknown word, only one that costs more tokens.</p>
+
+    <h3>Where the vocabulary comes from</h3>
+
+    <p>Nobody chooses those fragments by hand; they are learned by <em>byte-pair encoding</em>, a procedure that is almost embarrassingly simple. Start with the 256 possible bytes, so every text is a sequence of single-byte tokens, then scan a huge corpus for the most frequent adjacent pair — in English, roughly <code>t</code> then <code>h</code> — fuse it into a new token, and rewrite the corpus. Repeat a hundred thousand times: frequent sequences condense early, rare ones never do. In the demonstration below you can watch this on a tiny corpus, one merge at a time, as <code>th</code>, <code>the</code>, and then <code>␣the</code> crystallize out of the character soup:</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p>The vocabulary is the output of byte-pair encoding. Seed it with the 256 byte values, express the corpus as single-byte tokens, then repeatedly find the most frequent adjacent pair and add it as a new token, recording the order each was learned. That order is the merge rank, essentially the whole tokenizer at inference time: to encode new text you apply merges greedily, always taking the lowest-ranked applicable merge first and replaying until no ranked pair remains. Encoding is therefore deterministic and roughly linear in length, and whatever was common in training stays cheap forever after.</p>
+
+    <p>Two consequences follow. First, the 256-byte floor never leaves the vocabulary, so byte fallback is always available: an unseen emoji, a rare script, or arbitrary binary junk decomposes into its UTF-8 bytes rather than failing — there is no unknown-token case, only inputs that cost more tokens. Second, vocabulary size is a genuine tradeoff: a larger vocabulary packs more text into fewer tokens, shortening sequences and saving compute in the length-bound layers, but it inflates the embedding and output-projection matrices and spends parameters on rare merges seen little in training. A hundred thousand entries is a common settling point.</p>
+
+    <p>In the demonstration below you can step through byte-pair encoding on a small corpus one merge at a time — each labelled by the rank in which it was learned, a running list tracking the growing vocabulary, and the symbol count falling as you go — as <code>th</code>, <code>the</code>, and then <code>␣the</code> condense out of the single-byte tokens in rank order:</p>
+  </div>
 
   <div class="figure" id="fig-bpe-merge"></div>
 
-  <p>This training history is exactly why tokenization has the texture you saw in the first demonstration. The merges are ranked by frequency, and encoding new text just replays them in order, so whatever was common in the training corpus is cheap forever after. It also explains the sharp edges. <code>Hello</code> and <code>␣hello</code> are unrelated entries, so capitalization and spacing genuinely change what the model receives. Your API bill and the context window are both measured in tokens, so the same program is cheaper to send than the same number of characters of, say, transliterated Klingon. And when you ask a model how many letters are in a word, you are asking about characters it never actually saw — it received one or two opaque ids, and any spelling knowledge it has was absorbed indirectly during training rather than read off the input.</p>
+  <div class="lv lv-novice">
+    <p>Now your text is a row of numbers, but a bare number means nothing alone. So the model keeps a giant table, one row per token, each row a list of numbers standing for that token's meaning. Words about similar things get similar lists, as if placed near each other on a map nobody arranged; it settled into shape on its own.</p>
 
-  <h3>From ids to vectors</h3>
+    <p>In the demonstration below you can tap a word on the map to see which others sit closest.</p>
+  </div>
 
-  <p>So the tokenizer hands the model a list of integers. An integer, though, is a barren thing: id 4,072 is not "more similar" to id 4,073 than to id 90,000. The very first thing the model proper does is exchange each id for something far richer. It holds a giant table — the <em>embedding matrix</em> — with one row per vocabulary entry, and each row is a vector of thousands of numbers. Looking up a token is nothing more than reading row <code>id</code> of that table. Everything the model can be said to know about a token in isolation lives in that vector, and the knowledge is encoded geometrically: tokens with related meanings sit near each other, and consistent directions in the space capture consistent relationships. Nobody designed this arrangement. During training the model is endlessly graded on predicting the next token, and nudging related tokens toward similar vectors happens to make those predictions better, so the geometry simply emerges. In the demonstration below you can tap the words on the map to select a token and inspect a schematic slice of its vector — notice how the neighborhoods organize themselves, and how nearby words have similar-looking columns of values:</p>
+  <div class="lv lv-mid">
+    <p>This history explains tokenization's sharp edges. Merges are ranked by frequency and encoding replays them in order, so whatever was common stays cheap forever, and <code>Hello</code> and <code>␣hello</code> are unrelated entries, so capitalization and spacing change what the model receives. Your bill and context window are both measured in tokens, and asking how many letters are in a word asks about characters the model never saw — it received one or two opaque ids, its spelling knowledge absorbed indirectly during training.</p>
+
+    <h3>From ids to vectors</h3>
+
+    <p>So the tokenizer hands the model a list of integers, and an integer is barren: id 4,072 is no more similar to 4,073 than to 90,000. The model proper first exchanges each id for something richer, from a giant table — the <em>embedding matrix</em> — one row per vocabulary entry, each a vector of thousands of numbers; looking up a token is just reading row <code>id</code>. Everything the model knows about a token in isolation lives in that vector, encoded geometrically: related meanings sit near each other and consistent directions capture consistent relationships. Nobody designed this — the model is graded endlessly on next-token prediction, and nudging related tokens toward similar vectors improves those predictions, so the geometry emerges. In the demonstration below you can tap the words on the map to select a token and inspect a schematic slice of its vector, watching the neighborhoods organize themselves and nearby words carry similar-looking columns of values:</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p>The tokenizer's output is a list of integer ids, ordinally meaningless — 4,072 and 4,073 are neighbors only by the accident of merge order. The first parametric operation replaces each id with a learned vector by indexing an embedding matrix of shape V &times; d_model: one row per vocabulary entry, each a d_model-dimensional vector. The lookup is a gather — row <code>id</code> read straight from the table, no matrix multiply required.</p>
+
+    <p>The arithmetic is worth doing explicitly. With V near 100,000 and d_model several thousand, the embedding matrix alone runs to 100,000 &times; 4,000 = 400 million parameters — hundreds of millions of weights before a single attention head exists. Many models tie weights: the same matrix, transposed, serves as the output projection that turns the final hidden state back into a distribution over the vocabulary, amortizing that table across both ends and keeping input and output vocabularies consistent by construction.</p>
+
+    <p>Each row holds learned geometry, not design: graded only on next-token prediction, the network finds that arranging related tokens along nearby directions lowers the loss, so semantic neighborhoods and relational directions emerge on their own. The accounting lives here too — because every id is one row and the sequence of ids is what the model consumes and the meter counts, tokens, not characters or words, are the unit of both context window and price. Transliterated Klingon costs more than equal-length English because it earned fewer merges, and asking a model to count a word's letters asks about characters it never received. In the demonstration below you can tap words to select a token and inspect a wider schematic slice of its row, with a cosine-similarity readout against its nearest neighbors — nearby tokens score close to 1 and carry similar-looking columns of values:</p>
+  </div>
 
   <div class="figure" id="fig-embedding"></div>
 
-  <p class="note">Anthropic does not publish the production tokenizer used by its models, so the tokenizations in this section come from a small illustrative byte-pair tokenizer with a few hundred merges built for these figures. The behavior it exhibits — greedy merges, whitespace sensitivity, rare words shattering, bytes as a fallback — is faithful to how real tokenizers work, but the exact token boundaries and ids will differ from what the real vocabulary produces.</p>
+  <div class="lv lv-novice">
+    <p>One note of honesty: the chopping here comes from a small stand-in tokenizer built for these pictures, not the private one Claude uses. It stays faithful — common words whole, rare ones shattered, nothing truly unknown — but the exact pieces would differ.</p>
 
-  <p>Your entire request is now a sequence of vectors, thousands of numbers per token, lined up in order. That sequence is the actual input to the transformer, and pushing it through — the forward pass — is where we go next.</p>
+    <p>Your whole message is now a long row of these number-lists, and feeding it through the model is the step we turn to next.</p>
+  </div>
+
+  <div class="lv lv-mid">
+    <p class="note">Anthropic does not publish its production tokenizer, so every tokenization here comes from a small illustrative byte-pair tokenizer built for these figures. Its behavior — greedy merges, whitespace sensitivity, rare words shattering, bytes as a fallback — is faithful to real tokenizers, but the exact boundaries and ids differ.</p>
+
+    <p>Your entire request is now a sequence of vectors, thousands of numbers per token, and pushing that sequence through the transformer — the forward pass — is where we go next.</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p class="note">A caveat, as in the other tiers: Anthropic does not publish the production tokenizer its models use, so every tokenization here comes from a small illustrative byte-pair tokenizer built for these figures. Its behavior — greedy rank-ordered merges, whitespace sensitivity, rare words shattering, bytes as the fallback floor — is faithful to real tokenizers, but the exact boundaries and ids differ.</p>
+
+    <p>Your request is now a matrix of shape sequence-length &times; d_model, thousands of numbers per token, and pushing it through the transformer — the forward pass — is where we go next.</p>
+  </div>
 </section>

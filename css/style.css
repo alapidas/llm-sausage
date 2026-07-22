@@ -4,7 +4,11 @@
    figures that do the talking.
    =================================================================== */
 
+/* Light is the default; the dark values live in the two blocks below and
+   must stay in sync with PAL_DARK in js/main.js. */
 :root {
+  color-scheme: light;
+  --surface: #ffffff;      /* raised elements: cards, buttons, slider thumbs */
   --ink: #3d4148;
   --ink-strong: #24272c;
   --faint: #6b727a;
@@ -32,6 +36,72 @@
   --border-dark: #b9bfc6; /* slider thumb border */
   --measure: 43rem;      /* prose column */
   --measure-wide: 52rem; /* figure column */
+}
+
+/* Dark theme. The variables are declared once and switched on by either
+   selector: the media query covers readers who never touched the toggle,
+   the attribute covers an explicit choice (and wins over the system).
+   Keep these values in sync with PAL_DARK in js/main.js. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #202429;
+  --ink: #c3c9d1;
+  --ink-strong: #e9edf2;
+  --faint: #8d959f;
+  --grid: #2f343b;
+  --bg: #181b1f;
+  --blue: #6aa9e8;
+  --blue-dark: #9ecbf5;
+  --orange: #efa066;
+  --orange-dark: #f5c091;
+  --green: #6fbf85;
+  --green-dark: #98d5a9;
+  --red: #e08381;
+  --red-dark: #eda3a2;
+  --purple: #a598d1;
+  --yellow: #e5c163;
+  --teal: #5ec8be;
+  --blue-soft: #1d2f42;
+  --orange-soft: #382a1d;
+  --green-soft: #1e3326;
+  --red-soft: #392426;
+  --purple-soft: #2b2740;
+  --gray-soft: #23272d;
+  --code-bg: #23272d;
+  --border: #3a4048;
+  --border-dark: #4a515a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #202429;
+    --ink: #c3c9d1;
+    --ink-strong: #e9edf2;
+    --faint: #8d959f;
+    --grid: #2f343b;
+    --bg: #181b1f;
+    --blue: #6aa9e8;
+    --blue-dark: #9ecbf5;
+    --orange: #efa066;
+    --orange-dark: #f5c091;
+    --green: #6fbf85;
+    --green-dark: #98d5a9;
+    --red: #e08381;
+    --red-dark: #eda3a2;
+    --purple: #a598d1;
+    --yellow: #e5c163;
+    --teal: #5ec8be;
+    --blue-soft: #1d2f42;
+    --orange-soft: #382a1d;
+    --green-soft: #1e3326;
+    --red-soft: #392426;
+    --purple-soft: #2b2740;
+    --gray-soft: #23272d;
+    --code-bg: #23272d;
+    --border: #3a4048;
+    --border-dark: #4a515a;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -116,6 +186,48 @@ header.hero .byline a:hover { text-decoration: underline; }
   margin-right: 0.35em;
 }
 
+/* Visually hidden, still read aloud. */
+.vh {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+button.theme-toggle {
+  font: inherit;
+  color: var(--blue-dark);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  vertical-align: -0.15em;
+  line-height: 1;
+}
+
+button.theme-toggle svg {
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+
+button.theme-toggle:hover { color: var(--ink-strong); }
+button.theme-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 3px; }
+
+/* Show only the icon of the theme you would switch to. These selectors must
+   stay more specific than the `button.theme-toggle svg` rule above. */
+button.theme-toggle .ico-moon { display: block; }
+button.theme-toggle .ico-sun { display: none; }
+:root[data-theme="dark"] .ico-moon { display: none; }
+:root[data-theme="dark"] .ico-sun { display: block; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ico-moon { display: none; }
+  :root:not([data-theme="light"]) .ico-sun { display: block; }
+}
+
 nav.toc {
   margin: 2.5rem auto 3rem;
   max-width: var(--measure);
@@ -139,6 +251,79 @@ nav.toc a {
 }
 
 nav.toc a:hover { text-decoration: underline; }
+
+/* ---------------- reading level ---------------- */
+
+/* First visit (html.gate, set by the inline head script when no level is
+   saved): show the chooser cards, hide the article until a card is picked.
+   Without JS neither class nor attribute is set and the page reads as the
+   Practitioner tier with no switcher chrome. */
+
+.level-gate { display: none; margin: 2.5rem auto 0; max-width: var(--measure); }
+html.gate .level-gate { display: block; }
+html.gate nav.toc,
+html.gate article > section,
+html.gate footer.end,
+html.gate .level-status { display: none; }
+
+.level-gate-lead { color: var(--faint); }
+
+.level-cards { display: flex; gap: 0.8rem; }
+
+.level-card {
+  flex: 1 1 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.level-card:hover { background: var(--gray-soft); }
+.level-card:active { background: var(--grid); }
+.level-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.level-card strong { display: block; color: var(--ink-strong); margin-bottom: 0.3rem; }
+.level-card span { font-size: 0.9rem; color: var(--faint); line-height: 1.5; }
+
+.level-status {
+  display: none;
+  max-width: var(--measure);
+  margin: 2.5rem auto 0;
+  font-size: 0.95rem;
+  color: var(--faint);
+}
+html[data-level] .level-status { display: block; }
+
+button.level-change {
+  font: inherit;
+  color: var(--blue-dark);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+button.level-change:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* Tiered prose: each section wraps per-level prose in .lv blocks; figures
+   stay outside the wrappers and are shared by all tiers. */
+.lv { display: none; }
+html:not([data-level]):not(.gate) .lv-mid,
+html[data-level="mid"] .lv-mid,
+html[data-level="novice"] .lv-novice,
+html[data-level="deep"] .lv-deep { display: block; }
+
+/* .lv children need the same measure as direct section children. */
+article > section > .lv > * {
+  max-width: var(--measure);
+  margin-left: auto;
+  margin-right: auto;
+}
 
 /* ---------------- prose ---------------- */
 
@@ -282,7 +467,7 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 18px; height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
   border: 1.5px solid var(--border-dark);
   box-shadow: 0 1px 3px rgba(0,0,0,0.18);
   margin-top: -7px;
@@ -297,7 +482,7 @@ input[type="range"]::-moz-range-track {
 input[type="range"]::-moz-range-thumb {
   width: 18px; height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
   border: 1.5px solid var(--border-dark);
   box-shadow: 0 1px 3px rgba(0,0,0,0.18);
 }
@@ -316,7 +501,7 @@ button.fig-btn {
   font: inherit;
   font-size: 0.88rem;
   color: var(--ink);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 0.32rem 0.95rem;
@@ -355,6 +540,7 @@ footer.end {
   header.hero { padding-top: 3rem; }
   header.hero h1 { font-size: 1.9rem; }
   h2 { font-size: 1.5rem; margin-top: 3.2rem; }
+  .level-cards { flex-direction: column; }
 }
 
 /* Below 360px, trim article padding so the figure container keeps close to
@@ -366,7 +552,29 @@ footer.end {
 /* ---------------- print ---------------- */
 
 @media print {
+  /* Always print light, whatever the reader is viewing. js/main.js repaints
+     the figures to the light palette on beforeprint to match. */
+  :root, :root[data-theme="dark"] {
+    color-scheme: light;
+    --surface: #ffffff;
+    --ink: #3d4148;
+    --ink-strong: #24272c;
+    --faint: #6b727a;
+    --grid: #e3e6ea;
+    --bg: #ffffff;
+    --code-bg: #f4f5f7;
+    --border: #c9cdd3;
+  }
+
   .controls,
-  .fig-motion { display: none; }
+  .fig-motion,
+  .level-gate,
+  .theme-toggle,
+  .level-status { display: none; }
+  /* If the chooser gate is open, still print the article (as Practitioner). */
+  html.gate nav.toc,
+  html.gate article > section,
+  html.gate footer.end { display: revert; }
+  html.gate:not([data-level]) .lv-mid { display: block; }
   .figure { break-inside: avoid; page-break-inside: avoid; }
 }

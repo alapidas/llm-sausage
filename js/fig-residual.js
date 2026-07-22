@@ -1,16 +1,24 @@
 'use strict';
 /* fig-residual — three tokens riding their residual streams through an
-   eight-layer stack; each sublayer reads the vector and adds a delta. */
+   eight-layer stack; each sublayer reads the vector and adds a delta.
+   Level-aware: novice follows a single token up a short stack with plain
+   labels; deep annotates each sublayer's contribution magnitude. */
 Figures.register('fig-residual', (container, kit) => {
+  const level = kit.level();
+  const isNovice = level === 'novice';
+  const isDeep = level === 'deep';
+
   const cv = kit.makeCanvas(container, { height: 470,
-    ariaLabel: 'Diagram of three tokens rising through an eight-layer transformer stack, each sublayer adding a small correction to the residual stream.' });
+    ariaLabel: isNovice
+      ? 'Diagram of one word rising through a short stack of stations, each adding a small correction to its running vector.'
+      : 'Diagram of three tokens rising through an eight-layer transformer stack, each sublayer adding a small correction to the residual stream.' });
   const ctx = cv.ctx;
 
-  const L = 8;                 /* layers */
+  const L = isNovice ? 4 : 8;  /* layers */
   const SUB = L * 2;           /* sublayers: attention + MLP per layer */
-  const CELLS = 7;             /* components shown of each vector */
-  const LANES = 3;
-  const NAMES = ['fixed', 'test', 'it'];
+  const CELLS = isNovice ? 5 : 7;  /* components shown of each vector */
+  const LANES = isNovice ? 1 : 3;
+  const NAMES = isNovice ? ['it'] : ['fixed', 'test', 'it'];
   const CELLCOL = [PAL.blue, PAL.teal, PAL.purple, PAL.orange, PAL.green, PAL.red, PAL.yellow];
 
   function rgba(hex, a) {
@@ -40,12 +48,15 @@ Figures.register('fig-residual', (container, kit) => {
     delta.push(ds);
   }
 
-  const controls = kit.makeControls(container);
-  const laneSl = kit.makeSlider(controls, {
-    label: 'Follow token', min: 1, max: 3, step: 1, value: 3,
-    format: v => '“' + NAMES[v - 1] + '”',
-    onInput: () => draw(),
-  });
+  let laneSl = null;
+  if (!isNovice) {
+    const controls = kit.makeControls(container);
+    laneSl = kit.makeSlider(controls, {
+      label: 'Follow token', min: 1, max: 3, step: 1, value: 3,
+      format: v => '“' + NAMES[v - 1] + '”',
+      onInput: () => draw(),
+    });
+  }
 
   let p = 0;   /* pulse progress, 0 bottom -> 1 top */
 
@@ -81,6 +92,12 @@ Figures.register('fig-residual', (container, kit) => {
     return kit.clamp((band.y1 - pulseY) / (band.y1 - band.y0), 0, 1);
   }
 
+  function deltaNorm(lane, s) {
+    let n = 0;
+    for (let c = 0; c < CELLS; c++) { const d = delta[lane][s][c]; n += d * d; }
+    return Math.sqrt(n);
+  }
+
   function drawStrip(x, y, vals, alpha) {
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -111,7 +128,7 @@ Figures.register('fig-residual', (container, kit) => {
   function draw() {
     const g = geometry();
     ctx.clearRect(0, 0, g.w, g.h);
-    const selLane = Math.round(laneSl.value) - 1;
+    const selLane = isNovice ? 0 : Math.round(laneSl.value) - 1;
     const pulseY = kit.lerp(g.yStart, g.yEnd, p);
 
     /* layer blocks with their two sublayer bands */
@@ -137,8 +154,8 @@ Figures.register('fig-residual', (container, kit) => {
       ctx.font = '11px ' + PAL.sans;
       ctx.fillStyle = PAL.faint;
       ctx.textAlign = 'right';
-      ctx.fillText('layer ' + (li + 1), g.left - 8, (bl.y0 + bl.y1) / 2);
-      if (li === 0) {
+      ctx.fillText((isNovice ? 'step ' : 'layer ') + (li + 1), g.left - 8, (bl.y0 + bl.y1) / 2);
+      if (li === 0 && !isNovice) {
         ctx.textAlign = 'left';
         ctx.fillStyle = PAL.blueDark;
         ctx.fillText('attention', g.left + 9, (bl.bands[0].y0 + bl.bands[0].y1) / 2);
@@ -164,8 +181,25 @@ Figures.register('fig-residual', (container, kit) => {
     ctx.fillStyle = PAL.faint;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText('to the unembedding', g.left + g.blockW / 2, 14);
-    ctx.fillText('embeddings enter', g.left + g.blockW / 2, g.h - 6);
+    ctx.fillText(isNovice ? 'the answer takes shape here' : 'to the unembedding', g.left + g.blockW / 2, 14);
+    ctx.fillText(isNovice ? 'your word enters here' : 'embeddings enter', g.left + g.blockW / 2, g.h - 6);
+
+    /* deep: running tally of attention vs MLP contribution on the followed lane */
+    if (isDeep) {
+      let attnSum = 0, mlpSum = 0;
+      for (const bl of g.blocks) {
+        for (const band of bl.bands) {
+          const c = deltaNorm(selLane, band.s) * passedAmount(band, pulseY);
+          if (band.type === 'attn') attnSum += c; else mlpSum += c;
+        }
+      }
+      ctx.textAlign = 'left';
+      ctx.font = '11px ' + PAL.mono;
+      ctx.fillStyle = PAL.blueDark;
+      ctx.fillText('attn Σ‖Δ‖ ' + attnSum.toFixed(2), 6, 20);
+      ctx.fillStyle = PAL.purple;
+      ctx.fillText('MLP  Σ‖Δ‖ ' + mlpSum.toFixed(2), 6, 33);
+    }
 
     /* side branch + merge on the selected lane's current band */
     for (const bl of g.blocks) {
@@ -193,6 +227,14 @@ Figures.register('fig-residual', (container, kit) => {
           ctx.textBaseline = 'middle';
           ctx.fillText('+', bx, yt + 0.5);
           ctx.textBaseline = 'alphabetic';
+          if (isDeep) {
+            ctx.textAlign = 'left';
+            ctx.font = '11px ' + PAL.mono;
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = band.type === 'attn' ? PAL.blueDark : PAL.purple;
+            ctx.fillText((band.type === 'attn' ? 'attn' : 'MLP') + ' ‖Δ‖ ' + deltaNorm(selLane, band.s).toFixed(2), bx + 14, yt);
+            ctx.textBaseline = 'alphabetic';
+          }
         }
       }
     }
@@ -219,16 +261,20 @@ Figures.register('fig-residual', (container, kit) => {
   }
 
   const loop = kit.animLoop(dt => {
-    p += dt * 0.09;
+    p += dt * (isNovice ? 0.07 : 0.09);
     if (p >= 1) p -= 1;
     draw();
   });
 
   cv.onResize(draw);
   draw();
-  kit.caption(container,
-    'Three tokens rise through the stack at once. Each sublayer branches off the residual stream, ' +
-    'reads the vector, and adds a small correction back in (the “+”); the vector itself is never replaced. ' +
-    'The slider picks which stream to highlight.');
+  const cap = isNovice
+    ? 'One word rides up a short stack of identical stations. Each station reads the word’s running list of numbers and adds a small change back in (the “+”); the list is never thrown away and rewritten, only nudged.'
+    : isDeep
+      ? 'Three tokens rise through the stack at once; the slider picks which to follow. Each sublayer branches off the residual stream, reads the vector, and adds a correction back in (the “+”). For the followed stream the panel tallies how much the attention and MLP sublayers each contribute — the L2 norm ‖Δ‖ of every added correction — and the active sublayer shows its own ‖Δ‖.'
+      : 'Three tokens rise through the stack at once. Each sublayer branches off the residual stream, ' +
+        'reads the vector, and adds a small correction back in (the “+”); the vector itself is never replaced. ' +
+        'The slider picks which stream to highlight.';
+  kit.caption(container, cap);
   return loop;
 });

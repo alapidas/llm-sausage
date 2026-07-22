@@ -19,8 +19,13 @@
    =================================================================== */
 'use strict';
 
-/* ---------------- palette ---------------- */
-window.PAL = {
+/* ---------------- palette ----------------
+   Two themes. Figures read PAL at draw time and are rebuilt on a theme
+   change, so swapping these values in place repaints every canvas.
+   The `*Dark` entries mean "the stronger stroke version of this hue": on a
+   white page that is a darker shade, on a dark page a lighter one.
+   Keep in sync with the CSS custom properties in css/style.css. */
+const PAL_LIGHT = {
   ink:      '#3d4148',
   inkStrong:'#24272c',
   faint:    '#6b727a',
@@ -43,9 +48,62 @@ window.PAL = {
   redSoft:    '#f8e0df',
   purpleSoft: '#e8e3f3',
   graySoft:   '#f2f3f5',
+  /* Terminal/screen slab. Stays dark in BOTH themes — a terminal is dark
+     even on a dark page — so accents drawn on it keep their contrast.
+     `panelEdge` matches the slab in light (invisible) and outlines it in
+     dark, where the slab alone would blend into the page. */
+  panel:     '#24272c',
+  panelInk:  '#f2f3f5',
+  panelEdge: '#24272c',
+};
+
+const PAL_DARK = {
+  ink:      '#c3c9d1',
+  inkStrong:'#e9edf2',
+  faint:    '#8d959f',
+  grid:     '#2f343b',
+  bg:       '#181b1f',
+  blue:     '#6aa9e8',
+  blueDark: '#9ecbf5',
+  orange:   '#efa066',
+  orangeDark: '#f5c091',
+  green:    '#6fbf85',
+  greenDark: '#98d5a9',
+  red:      '#e08381',
+  redDark:  '#eda3a2',
+  purple:   '#a598d1',
+  yellow:   '#e5c163',
+  teal:     '#5ec8be',
+  blueSoft:   '#1d2f42',
+  orangeSoft: '#382a1d',
+  greenSoft:  '#1e3326',
+  redSoft:    '#392426',
+  purpleSoft: '#2b2740',
+  graySoft:   '#23272d',
+  panel:     '#101216',
+  panelInk:  '#e9edf2',
+  panelEdge: '#343b44',
+};
+
+window.PAL = {
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 };
+
+/* Mutate PAL in place so figures holding a reference see the new colors. */
+window.applyPalette = theme => {
+  Object.assign(window.PAL, theme === 'dark' ? PAL_DARK : PAL_LIGHT);
+};
+
+/* Effective theme: an explicit choice wins, otherwise follow the system. */
+window.currentTheme = () => {
+  const t = document.documentElement.getAttribute('data-theme');
+  if (t === 'dark' || t === 'light') return t;
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    ? 'dark' : 'light';
+};
+
+window.applyPalette(window.currentTheme());
 
 /* ---------------- FigKit helpers ---------------- */
 window.FigKit = (() => {
@@ -60,6 +118,14 @@ window.FigKit = (() => {
   };
   kit.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   kit.lerp = (a, b, t) => a + (b - a) * t;
+
+  /* Current reading level ('novice' | 'mid' | 'deep'). Figures read this at
+     setup and render a tier-appropriate version of themselves; the runtime
+     re-runs every figure's setup when the reader switches levels. */
+  kit.level = () => {
+    const l = document.documentElement.getAttribute('data-level');
+    return (l === 'novice' || l === 'deep') ? l : 'mid';
+  };
 
   /* DPR-aware canvas that tracks its container's width.
      opts: { aspect: h/w ratio (default 0.6), maxHeight, height (fixed CSS px),
@@ -288,11 +354,46 @@ window.Figures = (() => {
     el.appendChild(bar);
   }
 
+  let io = null;
+  let reduceMotion = false;
+
+  function initOne(id, setup) {
+    const el = document.getElementById(id);
+    if (!el) { console.warn('missing figure container:', id); return; }
+
+    /* Teardown a previous instance (re-init on reading-level switch). */
+    if (el.__figInstance) {
+      try { el.__figInstance.stop && el.__figInstance.stop(); }
+      catch (err) { console.error(err); }
+      io.unobserve(el);
+      el.__figInstance = null;
+      el.innerHTML = '';
+    }
+
+    let inst = null;
+    try { inst = setup(el, window.FigKit) || {}; }
+    catch (err) { console.error('figure "' + id + '" failed to init:', err); return; }
+    el.__figInstance = inst;
+
+    const isLoop = inst && typeof inst.start === 'function' && typeof inst.stop === 'function';
+    if (reduceMotion && isLoop) {
+      /* Do not auto-start. Render exactly one frame so the figure is not
+         blank, then pause and expose a manual Play/Pause affordance. */
+      injectPlayPause(el, inst);
+      inst.start();
+      requestAnimationFrame(() => inst.stop());
+    } else {
+      /* observe() always delivers a fresh entry, so a currently-visible
+         figure starts again immediately after a re-init. */
+      io.observe(el);
+    }
+  }
+
   function initAll() {
-    const reduceMotion = window.matchMedia
+    reduceMotion = window.matchMedia
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const io = new IntersectionObserver(entries => {
+    io = new IntersectionObserver(entries => {
       for (const e of entries) {
         const inst = e.target.__figInstance;
         if (!inst) continue;
@@ -303,27 +404,108 @@ window.Figures = (() => {
       }
     }, { rootMargin: '150px 0px' });
 
-    for (const [id, setup] of registry) {
-      const el = document.getElementById(id);
-      if (!el) { console.warn('missing figure container:', id); continue; }
-      let inst = null;
-      try { inst = setup(el, window.FigKit) || {}; }
-      catch (err) { console.error('figure "' + id + '" failed to init:', err); continue; }
-      el.__figInstance = inst;
+    for (const [id, setup] of registry) initOne(id, setup);
+  }
 
-      const isLoop = inst && typeof inst.start === 'function' && typeof inst.stop === 'function';
-      if (reduceMotion && isLoop) {
-        /* Do not auto-start. Render exactly one frame so the figure is not
-           blank, then pause and expose a manual Play/Pause affordance. */
-        injectPlayPause(el, inst);
-        inst.start();
-        requestAnimationFrame(() => inst.stop());
-      } else {
-        io.observe(el);
-      }
-    }
+  /* Rebuild every figure for the current reading level. */
+  function reinit() {
+    if (!io) return;
+    for (const [id, setup] of registry) initOne(id, setup);
   }
 
   document.addEventListener('DOMContentLoaded', initAll);
-  return { register };
+  return { register, reinit };
+})();
+
+/* ---------------- reading level ---------------- */
+/* The inline head script has already set html[data-level] from localStorage,
+   or html.gate when nothing is saved (first visit — chooser cards shown,
+   article hidden). This wires the cards and the "Reading as … change" line. */
+(() => {
+  const NAMES = { novice: 'Newcomer', mid: 'Practitioner', deep: 'Deep dive' };
+
+  function init() {
+    const html = document.documentElement;
+    const gate = document.getElementById('level-gate');
+    const nameEl = document.getElementById('level-status-name');
+    const changeBtn = document.getElementById('level-change');
+    if (!gate || !nameEl || !changeBtn) return;
+
+    function apply(level) {
+      const prev = html.getAttribute('data-level');
+      html.setAttribute('data-level', level);
+      html.classList.remove('gate');
+      nameEl.textContent = NAMES[level];
+      try { localStorage.setItem('sausage-level', level); } catch (e) { /* private mode etc. */ }
+      /* Figures render differently per level; rebuild them on a real change
+         (and on the first pick, when setup ran behind the hidden gate). */
+      if (prev !== level && window.Figures && window.Figures.reinit) {
+        window.Figures.reinit();
+      }
+    }
+
+    gate.querySelectorAll('.level-card').forEach(btn => {
+      btn.addEventListener('click', () => apply(btn.dataset.level));
+    });
+
+    changeBtn.addEventListener('click', () => {
+      html.classList.add('gate');
+      const first = gate.querySelector('.level-card');
+      if (first) first.focus();
+    });
+
+    const cur = html.getAttribute('data-level');
+    if (cur && NAMES[cur]) nameEl.textContent = NAMES[cur];
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+
+/* ---------------- theme ---------------- */
+/* The inline head script has already set html[data-theme] from localStorage
+   when the reader made an explicit choice; with no choice stored, the CSS
+   media query follows the system. This wires the toggle and repaints the
+   figures, whose colors are baked in at draw time. */
+(() => {
+  function init() {
+    const html = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+
+    function repaint() {
+      const theme = window.currentTheme();
+      window.applyPalette(theme);
+      btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      btn.title = theme === 'dark' ? 'Switch to light' : 'Switch to dark';
+      if (window.Figures && window.Figures.reinit) window.Figures.reinit();
+    }
+
+    btn.addEventListener('click', () => {
+      const next = window.currentTheme() === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      try { localStorage.setItem('sausage-theme', next); } catch (e) { /* private mode etc. */ }
+      repaint();
+    });
+
+    /* Follow the system while the reader has not chosen explicitly. */
+    if (window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const onChange = () => { if (!html.hasAttribute('data-theme')) repaint(); };
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    }
+
+    /* Print stylesheet forces light; repaint the canvases to match. */
+    window.addEventListener('beforeprint', () => {
+      window.applyPalette('light');
+      if (window.Figures && window.Figures.reinit) window.Figures.reinit();
+    });
+    window.addEventListener('afterprint', repaint);
+
+    const theme = window.currentTheme();
+    btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+    btn.title = theme === 'dark' ? 'Switch to light' : 'Switch to dark';
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
 })();

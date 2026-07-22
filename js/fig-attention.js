@@ -1,8 +1,14 @@
 'use strict';
 /* fig-attention — one attention head at a time, over a fixed sentence.
    Hover/tap a token: arcs to every earlier token, thickness = weight.
-   Three hand-designed pseudo-heads; weights are illustrative only. */
+   Three hand-designed pseudo-heads; weights are illustrative only.
+   Level-aware: novice fixes a single head and drops jargon; deep exposes
+   the numeric weights on every bar and reads out the strongest source. */
 Figures.register('fig-attention', (container, kit) => {
+  const level = kit.level();
+  const isNovice = level === 'novice';
+  const isDeep = level === 'deep';
+
   const cv = kit.makeCanvas(container, { height: 340,
     ariaLabel: 'Diagram of one attention head over a fixed sentence, showing which earlier words each token draws from as weighted arcs and bars.' });
   const ctx = cv.ctx;
@@ -77,25 +83,28 @@ Figures.register('fig-attention', (container, kit) => {
   let cycleT = 0;
   const disp = HEADS[head].W[sel].slice();
 
-  /* --- controls: head selector buttons --- */
-  const controls = kit.makeControls(container);
-  const btnWrap = document.createElement('div');
-  btnWrap.style.display = 'flex';
-  btnWrap.style.flexWrap = 'wrap';
-  btnWrap.style.justifyContent = 'center';
-  btnWrap.style.gap = '0.5rem';
-  controls.appendChild(btnWrap);
-  const btns = HEADS.map((hd, i) => kit.makeButton(btnWrap, hd.name, () => {
-    head = i;
-    syncBtns();
-  }));
+  /* --- controls: head selector buttons (not shown at novice level) --- */
+  let btns = [];
   function syncBtns() {
     btns.forEach((b, i) => {
       b.style.background = i === head ? PAL.blueSoft : '';
       b.style.borderColor = i === head ? PAL.blue : '';
     });
   }
-  syncBtns();
+  if (!isNovice) {
+    const controls = kit.makeControls(container);
+    const btnWrap = document.createElement('div');
+    btnWrap.style.display = 'flex';
+    btnWrap.style.flexWrap = 'wrap';
+    btnWrap.style.justifyContent = 'center';
+    btnWrap.style.gap = '0.5rem';
+    controls.appendChild(btnWrap);
+    btns = HEADS.map((hd, i) => kit.makeButton(btnWrap, hd.name, () => {
+      head = i;
+      syncBtns();
+    }));
+    syncBtns();
+  }
 
   /* --- layout: one row of token boxes, font shrinks to fit --- */
   let boxes = [];
@@ -143,7 +152,19 @@ Figures.register('fig-attention', (container, kit) => {
     ctx.fillStyle = PAL.faint;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(HEADS[head].name + ' — where “' + TOKENS[sel] + '” looks', 10, 16);
+    if (isNovice) {
+      ctx.fillText('Where “' + TOKENS[sel] + '” looks back', 10, 16);
+    } else {
+      ctx.fillText(HEADS[head].name + ' — where “' + TOKENS[sel] + '” looks', 10, 16);
+      if (isDeep) {
+        let top = 0, tv = -1;
+        for (let j = 0; j <= sel; j++) { if (disp[j] > tv) { tv = disp[j]; top = j; } }
+        ctx.textAlign = 'right';
+        ctx.fillStyle = PAL.faint;
+        ctx.fillText('strongest: “' + TOKENS[top] + '” ' + Math.round(tv * 100) + '%', w - 10, 16);
+        ctx.textAlign = 'left';
+      }
+    }
 
     /* arcs from the selected token to earlier ones */
     for (let j = 0; j < sel; j++) {
@@ -212,7 +233,8 @@ Figures.register('fig-attention', (container, kit) => {
       const bh = Math.max(1, v * barMax);
       ctx.fillStyle = j === sel ? PAL.orange : PAL.blue;
       ctx.fillRect(bx, yB - bh, bw, bh);
-      if (v > 0.12 && b.w > 32) {
+      const showPct = isDeep ? (v > 0.02 && b.w > 26) : (v > 0.12 && b.w > 32);
+      if (showPct) {
         ctx.fillStyle = PAL.faint;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
@@ -222,7 +244,7 @@ Figures.register('fig-attention', (container, kit) => {
     ctx.fillStyle = PAL.faint;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText('softmax weights', 10, h - 5);
+    ctx.fillText(isNovice ? 'how much each earlier word matters' : 'softmax weights', 10, h - 5);
   }
 
   /* --- pointer interaction --- */
@@ -274,9 +296,13 @@ Figures.register('fig-attention', (container, kit) => {
 
   cv.onResize(draw);
   draw();
-  kit.caption(container,
-    'One attention head at a time: hover or tap a word to see which earlier tokens it draws from ' +
-    '(arc thickness and the bars show the softmax weights; grayed words lie in the masked future). ' +
-    'The weights are hand-made, but note the coreference head sending “it” back to “test”.');
+  const cap = isNovice
+    ? 'Each word looks back over the earlier words and leans on the ones that matter for it — here “it” reaches back to “test”. Hover or tap any word (they also take turns on their own) to see what it looks back at; grayed words come later, so they cannot be seen yet.'
+    : isDeep
+      ? 'One attention head at a time, picked with the buttons: hover or tap a word to read the softmax weight it places on each earlier token (arc thickness, bars, and a percentage on every bar), with the strongest source called out up top. Grayed words lie in the masked future; the weights are hand-made.'
+      : 'One attention head at a time: hover or tap a word to see which earlier tokens it draws from ' +
+        '(arc thickness and the bars show the softmax weights; grayed words lie in the masked future). ' +
+        'The weights are hand-made, but note the coreference head sending “it” back to “test”.';
+  kit.caption(container, cap);
   return loop;
 });

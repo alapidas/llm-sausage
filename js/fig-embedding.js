@@ -4,7 +4,9 @@
 'use strict';
 
 Figures.register('fig-embedding', (container, kit) => {
-  var DIMS = 24;
+  var level = kit.level();
+  /* Deep exposes a wider slice of the vector; novice hides the slice entirely. */
+  var DIMS = level === 'deep' ? 48 : 24;
 
   var CLUSTERS = [
     { name: 'code', color: PAL.blue, soft: PAL.blueSoft, words: [
@@ -75,10 +77,22 @@ Figures.register('fig-embedding', (container, kit) => {
     if (POINTS[p0].word === 'cat') { sel = p0; break; }
   }
 
-  var cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 430,
-    ariaLabel: 'A two-dimensional map of word embeddings where related words ' +
+  /* Cosine similarity between two equal-length vectors (deep readout). */
+  function cosine(a, b) {
+    var dot = 0, na = 0, nb = 0;
+    for (var i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
+  }
+
+  var ariaLabel = level === 'novice'
+    ? 'A two-dimensional map of words where related words cluster together; ' +
+      'use the arrow keys or tap to move the selection between words.'
+    : 'A two-dimensional map of word embeddings where related words ' +
       'cluster together, beside a schematic readout of the selected token\'s ' +
-      'vector; use the arrow keys to move the selection between words.' });
+      'vector' + (level === 'deep' ? ' and its cosine similarity to nearby tokens' : '') +
+      '; use the arrow keys to move the selection between words.';
+  var cv = kit.makeCanvas(container, { aspect: 0.78, maxHeight: 430,
+    ariaLabel: ariaLabel });
   var ctx = cv.ctx;
 
   function neighbors(i, n) {
@@ -97,8 +111,10 @@ Figures.register('fig-embedding', (container, kit) => {
     var narrow = w < 460;
     ctx.clearRect(0, 0, w, h);
     var p = POINTS[sel];
-    var panelW = kit.clamp(w * 0.26, 92, 138);
+    /* Novice drops the left vector-slice inspector: the map fills the width. */
+    var panelW = level === 'novice' ? 0 : kit.clamp(w * 0.26, 92, 138);
 
+    if (level !== 'novice') {
     /* ----- left panel: token pill + id ----- */
     ctx.font = '13px ' + PAL.mono;
     var pillW = Math.min(panelW - 12, ctx.measureText(p.word).width + 18);
@@ -138,7 +154,7 @@ Figures.register('fig-embedding', (container, kit) => {
     ctx.font = '11px ' + PAL.sans;
     ctx.fillStyle = PAL.faint;
     ctx.textAlign = 'center';
-    ctx.fillText('24 of a few', panelW / 2, colBot + 12);
+    ctx.fillText(DIMS + ' of a few', panelW / 2, colBot + 12);
     ctx.fillText('thousand cells', panelW / 2, colBot + 24);
 
     /* ----- divider ----- */
@@ -147,9 +163,10 @@ Figures.register('fig-embedding', (container, kit) => {
     ctx.moveTo(panelW + 6.5, 12);
     ctx.lineTo(panelW + 6.5, h - 12);
     ctx.stroke();
+    } /* end left panel (mid/deep only) */
 
     /* ----- scatter map ----- */
-    var sx0 = panelW + 20, sx1 = w - 14;
+    var sx0 = panelW > 0 ? panelW + 20 : 14, sx1 = w - 14;
     var sy0 = 18, sy1 = h - 42;
     function px(pt) { return sx0 + pt.x * (sx1 - sx0); }
     function py(pt) { return sy0 + pt.y * (sy1 - sy0); }
@@ -205,16 +222,25 @@ Figures.register('fig-embedding', (container, kit) => {
     ctx.fillStyle = PAL.faint;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    var names = near.map(function (j) { return POINTS[j].word; }).join(', ');
-    ctx.fillText('nearby: ' + names, sx0, h - 16);
+    if (level === 'deep') {
+      /* cosine similarity between the selected vector and each neighbor */
+      var parts = near.map(function (j) {
+        return POINTS[j].word + ' ' + cosine(p.vec, POINTS[j].vec).toFixed(2);
+      }).join('  ·  ');
+      ctx.fillText('cosine to nearest: ' + parts, sx0, h - 16);
+    } else {
+      var names = near.map(function (j) { return POINTS[j].word; }).join(', ');
+      var lbl = level === 'novice' ? 'closest words: ' : 'nearby: ';
+      ctx.fillText(lbl + names, sx0, h - 16);
+    }
   }
 
   /* ---------- interaction ---------- */
   function pick(ev) {
     var pos = cv.pointer(ev);
     var w = cv.w, h = cv.h;
-    var panelW = kit.clamp(w * 0.26, 92, 138);
-    var sx0 = panelW + 20, sx1 = w - 14;
+    var panelW = level === 'novice' ? 0 : kit.clamp(w * 0.26, 92, 138);
+    var sx0 = panelW > 0 ? panelW + 20 : 14, sx1 = w - 14;
     var sy0 = 18, sy1 = h - 42;
     var best = -1, bestD = 28 * 28;
     for (var i = 0; i < POINTS.length; i++) {
@@ -262,12 +288,28 @@ Figures.register('fig-embedding', (container, kit) => {
   cv.onResize(draw);
   draw();
 
-  kit.caption(container,
-    'Row lookup in the embedding matrix, and a 2-D cartoon of where the ' +
-    'resulting vectors live. Real embeddings have thousands of dimensions, ' +
-    'not two, and the values here are illustrative — but the idea that ' +
-    'related tokens sit near each other is the real mechanism. Hover or ' +
-    'tap a word to inspect it.');
+  if (level === 'novice') {
+    kit.caption(container,
+      'A map of meaning: related words sit near each other. Tap a word to ' +
+      'select it and see its closest neighbors. The exact positions are ' +
+      'illustrative, but the idea that related words sit together is the ' +
+      'real mechanism.');
+  } else if (level === 'deep') {
+    kit.caption(container,
+      'Row lookup in the embedding matrix, and a 2-D cartoon of where the ' +
+      'resulting vectors live. Real embeddings have thousands of dimensions, ' +
+      'not two, and the values here are illustrative — but the idea that ' +
+      'related tokens sit near each other is the real mechanism. Hover or ' +
+      'tap a word to inspect it; the readout gives the cosine similarity to ' +
+      'its nearest neighbors, and the column shows ' + DIMS + ' cells of the row.');
+  } else {
+    kit.caption(container,
+      'Row lookup in the embedding matrix, and a 2-D cartoon of where the ' +
+      'resulting vectors live. Real embeddings have thousands of dimensions, ' +
+      'not two, and the values here are illustrative — but the idea that ' +
+      'related tokens sit near each other is the real mechanism. Hover or ' +
+      'tap a word to inspect it.');
+  }
 
   return {};
 });

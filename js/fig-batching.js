@@ -4,18 +4,28 @@
 'use strict';
 
 Figures.register('fig-batching', (container, kit) => {
+  const level = kit.level();
+  const NOVICE = level === 'novice';
+  const DEEP = level === 'deep';
+
+  const ARIA = NOVICE
+    ? 'A timeline where each row is a seat and each order is a bar; finished orders leave and new ones slip in without the line stopping.'
+    : (DEEP
+      ? 'A timeline of continuous batching on one model server, requests joining and leaving the batch at single-token granularity, with a readout comparing continuous batching against static batching and the average wait.'
+      : 'A timeline of continuous batching on one model server, where requests join and leave the batch at the granularity of a single token.');
+
   const cv = kit.makeCanvas(container, { aspect: 0.6, maxHeight: 400,
-    ariaLabel: 'A timeline of continuous batching on one model server, where requests join and leave the batch at the granularity of a single token.' });
+    ariaLabel: ARIA });
   const controls = kit.makeControls(container);
 
   let arrival = 2.0; // requests per second (animation time)
   kit.makeSlider(controls, {
-    label: 'Arrival rate', min: 0.3, max: 4.5, step: 0.1, value: arrival,
+    label: NOVICE ? 'Orders arriving' : 'Arrival rate', min: 0.3, max: 4.5, step: 0.1, value: arrival,
     format: v => v.toFixed(1) + '/s',
     onInput: v => { arrival = v; },
   });
 
-  const SLOTS = 8;
+  const SLOTS = NOVICE ? 4 : 8;
   const STEPS_PER_SEC = 3;   // forward passes per second, slowed for legibility
   const NOMINAL = 50;        // tokens/sec a real server might emit per slot
   const COLORS = [PAL.blue, PAL.green, PAL.purple, PAL.teal, PAL.yellow, PAL.blueDark];
@@ -26,6 +36,8 @@ Figures.register('fig-batching', (container, kit) => {
   let colorIdx = 0;
   let mineWaiting = false, mineActive = false, mineTimer = 3;
   let emaOcc = 0;
+  let emaWait = 0;           // deep: mean wait (in forward passes) before admission
+  const recentLens = [];     // deep: token counts of recently admitted requests
 
   const slots = new Array(SLOTS).fill(null);
   const reqs = [];           // every request still on screen
@@ -36,7 +48,7 @@ Figures.register('fig-batching', (container, kit) => {
       tokens: 4 + Math.floor(Math.random() * 22),
       color: mine ? PAL.orange : COLORS[colorIdx++ % COLORS.length],
       mine: !!mine,
-      slot: -1, start: 0, end: 0,
+      slot: -1, start: 0, end: 0, enq: step,
     };
   }
 
@@ -57,6 +69,11 @@ Figures.register('fig-batching', (container, kit) => {
       if (r.mine) { mineWaiting = false; mineActive = true; }
       slots[i] = r;
       reqs.push(r);
+      if (DEEP) {
+        emaWait += ((s - r.enq) - emaWait) * 0.2;
+        recentLens.push(r.tokens);
+        if (recentLens.length > 24) recentLens.shift();
+      }
     }
   }
 
@@ -87,7 +104,7 @@ Figures.register('fig-batching', (container, kit) => {
     const { ctx, w, h } = cv;
     ctx.clearRect(0, 0, w, h);
 
-    const left = 26, topBar = 40, bottom = 20, right = 6;
+    const left = 26, topBar = DEEP ? 56 : 40, bottom = 20, right = 6;
     const plotW = w - left - right;
     const plotH = h - topBar - bottom;
     const cellW = plotW / Math.max(12, Math.floor(plotW / (w < 480 ? 16 : 21)));
@@ -100,16 +117,35 @@ Figures.register('fig-batching', (container, kit) => {
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = PAL.inkStrong;
     ctx.font = '600 13px ' + PAL.mono;
-    ctx.fillText('batch ' + occ + '/' + SLOTS, left, 16);
+    ctx.fillText((NOVICE ? 'seats ' : 'batch ') + occ + '/' + SLOTS, left, 16);
     ctx.fillStyle = PAL.faint;
     ctx.font = '11px ' + PAL.mono;
     const combined = Math.round(emaOcc * NOMINAL);
-    // long form only if it clears the "now" marker above the plot
-    let sub = '≈' + combined + ' tok/s combined · one user alone: ' + NOMINAL + ' tok/s';
-    if (left + ctx.measureText(sub).width > nowX - ctx.measureText('now').width - 10) {
-      sub = '≈' + combined + ' tok/s combined';
+    if (NOVICE) {
+      ctx.fillText('≈' + combined + ' words out per second', left, 32);
+    } else {
+      // long form only if it clears the "now" marker above the plot
+      let sub = '≈' + combined + ' tok/s combined · one user alone: ' + NOMINAL + ' tok/s';
+      if (left + ctx.measureText(sub).width > nowX - ctx.measureText('now').width - 10) {
+        sub = '≈' + combined + ' tok/s combined';
+      }
+      ctx.fillText(sub, left, 32);
+      if (DEEP) {
+        // static-vs-continuous comparison: static batching stalls the whole
+        // batch on its slowest member, so utilization ~ mean/max length
+        let mean = 0, mx = 1;
+        for (const t of recentLens) { mean += t; if (t > mx) mx = t; }
+        mean = recentLens.length ? mean / recentLens.length : 0;
+        const contPct = Math.round((emaOcc / SLOTS) * 100);
+        const staticPct = Math.round((mean / mx) * (emaOcc / SLOTS) * 100);
+        let d = 'continuous ' + contPct + '% vs static ' + staticPct + '% slot use · avg wait ' +
+          emaWait.toFixed(1) + ' passes';
+        if (left + ctx.measureText(d).width > w - 6) {
+          d = 'cont ' + contPct + '% vs static ' + staticPct + '% · wait ' + emaWait.toFixed(1);
+        }
+        ctx.fillText(d, left, 48);
+      }
     }
-    ctx.fillText(sub, left, 32);
 
     // clip to plot area (extended slightly above so the top slot's
     // "you" label, drawn just above its bar, is not clipped)
@@ -207,8 +243,8 @@ Figures.register('fig-batching', (container, kit) => {
     }
 
     // axis: forward-pass numbers every 10 steps (skip any that would
-    // land under the "forward passes" label at the left edge)
-    const axisLabel = 'forward passes →';
+    // land under the axis label at the left edge)
+    const axisLabel = NOVICE ? 'time →' : 'forward passes →';
     const axisLabelW = ctx.measureText(axisLabel).width;
     ctx.textAlign = 'center';
     for (let s = Math.ceil(firstS / 10) * 10; s <= lastS; s += 10) {
@@ -221,10 +257,20 @@ Figures.register('fig-batching', (container, kit) => {
 
   cv.onResize(draw);
   const loop = kit.animLoop(dt => { advance(dt); draw(); });
-  kit.caption(container,
-    'Continuous batching, slowed down enormously: each column is one forward pass through the ' +
-    'whole model, each row one batch slot. A request occupies a slot with a bright prefill pass ' +
-    'and then one cell per generated token; freed slots are refilled mid-stream. ' +
-    'The tok/s figures assume a nominal 50 tokens per second per slot.');
+  const CAP = NOVICE
+    ? 'One line, many orders at once: each row is a seat and each bar an order, with yours in ' +
+      'orange. A finished order leaves and a waiting one slips into the empty seat, so the line ' +
+      'never pauses. Turn up the arrivals to fill the seats.'
+    : (DEEP
+      ? 'Continuous batching, slowed down enormously: each column is one forward pass, each row a ' +
+        'slot, each bar a request (bright prefill, then one cell per token; yours in orange). ' +
+        'The readout compares slot utilization against static batching &mdash; which would stall the ' +
+        'whole batch on its slowest member &mdash; and shows the average wait before admission. ' +
+        'The tok/s figures assume a nominal 50 tokens per second per slot.'
+      : 'Continuous batching, slowed down enormously: each column is one forward pass through the ' +
+        'whole model, each row one batch slot. A request occupies a slot with a bright prefill pass ' +
+        'and then one cell per generated token; freed slots are refilled mid-stream. ' +
+        'The tok/s figures assume a nominal 50 tokens per second per slot.');
+  kit.caption(container, CAP);
   return loop;
 });

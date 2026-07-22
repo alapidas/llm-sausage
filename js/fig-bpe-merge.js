@@ -4,6 +4,7 @@
 'use strict';
 
 Figures.register('fig-bpe-merge', (container, kit) => {
+  var level = kit.level();
   var PHRASE = 'the theater is there and the weather is better there';
 
   /* ---------- precompute the whole merge history ---------- */
@@ -50,27 +51,40 @@ Figures.register('fig-bpe-merge', (container, kit) => {
   var playing = false;
   var waitT = 0;        // pause between merges while autoplaying
 
-  var cv = kit.makeCanvas(container, { height: 280 });
+  /* Base vocabulary size (distinct starting symbols) — a readout for deep. */
+  var baseVocab = new Set(PHRASE.split('')).size;
+
+  var H = level === 'novice' ? 250 : level === 'deep' ? 360 : 280;
+  var cv = kit.makeCanvas(container, { height: H });
   var ctx = cv.ctx;
 
   var controls = kit.makeControls(container);
-  var stepBtn = kit.makeButton(controls, 'Step', function () {
-    if (trans < 0 && k < steps.length) trans = 0;
-  });
-  var playBtn = kit.makeButton(controls, 'Play', function () {
-    if (k >= steps.length) { reset(); }
-    playing = !playing;
-    playBtn.textContent = playing ? 'Pause' : 'Play';
-  });
-  kit.makeButton(controls, 'Reset', reset);
-  var speed = kit.makeSlider(controls, {
-    label: 'Speed', min: 0.3, max: 3, value: 1,
-    format: function (v) { return v.toFixed(1) + '×'; },
-  });
+  var stepBtn, playBtn, speed;
+  if (level === 'novice') {
+    /* Self-running merge story: one Replay control, gentle fixed pacing. */
+    kit.makeButton(controls, 'Replay', function () {
+      k = 0; trans = -1; waitT = 0; playing = true; draw();
+    });
+    playing = true;
+  } else {
+    stepBtn = kit.makeButton(controls, 'Step', function () {
+      if (trans < 0 && k < steps.length) trans = 0;
+    });
+    playBtn = kit.makeButton(controls, 'Play', function () {
+      if (k >= steps.length) { reset(); }
+      playing = !playing;
+      playBtn.textContent = playing ? 'Pause' : 'Play';
+    });
+    kit.makeButton(controls, 'Reset', reset);
+    speed = kit.makeSlider(controls, {
+      label: 'Speed', min: 0.3, max: 3, value: 1,
+      format: function (v) { return v.toFixed(1) + '×'; },
+    });
+  }
 
   function reset() {
     k = 0; trans = -1; waitT = 0; playing = false;
-    playBtn.textContent = 'Play';
+    if (playBtn) playBtn.textContent = 'Play';
     draw();
   }
 
@@ -117,12 +131,22 @@ Figures.register('fig-bpe-merge', (container, kit) => {
     ctx.font = '12px ' + PAL.sans;
     ctx.fillStyle = PAL.faint;
     var header;
-    if (k >= steps.length && trans < 0) {
+    if (level === 'novice') {
+      if (k >= steps.length && trans < 0) {
+        header = 'done — every common pair is glued';
+      } else if (trans < 0 && k === 0) {
+        header = 'watch the most common pairs glue together';
+      } else {
+        header = 'gluing the most common pair:';
+      }
+    } else if (k >= steps.length && trans < 0) {
       header = 'merges: ' + steps.length + ' — no pair repeats any more';
     } else if (trans < 0 && k === 0) {
       header = 'merge 0 of ' + steps.length + ' — press Step or Play';
     } else {
-      header = 'merge ' + (trans >= 0 ? k + 1 : k) + ' of ' + steps.length + ':';
+      header = 'merge ' + (trans >= 0 ? k + 1 : k) + ' of ' + steps.length;
+      if (level === 'deep') header += ' · learned rank ' + (trans >= 0 ? k + 1 : k);
+      header += ':';
     }
     ctx.fillText(header, 12, 22);
     if (trans >= 0 || k > 0) {
@@ -135,7 +159,9 @@ Figures.register('fig-bpe-merge', (container, kit) => {
         ctx.fillText(rule, 12, 40);
         ctx.font = '12px ' + PAL.sans;
         ctx.fillStyle = PAL.faint;
-        ctx.fillText('× ' + st.count + ' occurrences', 12 + rw + 12, 40);
+        var cntTxt = level === 'novice' ? 'appears ' + st.count + ' times'
+                                        : '× ' + st.count + ' occurrences';
+        ctx.fillText(cntTxt, 12 + rw + 12, 40);
       }
     }
 
@@ -169,33 +195,85 @@ Figures.register('fig-bpe-merge', (container, kit) => {
       }
     }
 
+    /* deep: the running list of learned merges, numbered by rank */
+    if (level === 'deep') drawRankList(w, h);
+
     /* footer */
     ctx.font = '12px ' + PAL.sans;
     ctx.fillStyle = PAL.faint;
     ctx.textAlign = 'left';
-    var msg = states[k].length + ' symbols';
-    if (k >= steps.length && trans < 0) {
-      msg += ' — a real tokenizer keeps merging over a huge corpus, ~100,000 times';
+    var msg;
+    if (level === 'novice') {
+      msg = states[k].length + ' pieces';
+      if (k >= steps.length && trans < 0) {
+        msg += ' — real models repeat this thousands of times';
+      }
+    } else if (level === 'deep') {
+      msg = 'vocabulary: ' + (baseVocab + k) + ' entries · ' +
+        states[k].length + ' symbols';
+      if (k >= steps.length && trans < 0) {
+        msg += ' — real corpora merge on the order of 100,000 times';
+      }
+    } else {
+      msg = states[k].length + ' symbols';
+      if (k >= steps.length && trans < 0) {
+        msg += ' — a real tokenizer keeps merging over a huge corpus, ~100,000 times';
+      }
     }
     ctx.fillText(msg, 12, h - 12);
   }
 
+  /* Compact ranked chips of every merge learned so far (deep only). */
+  function drawRankList(w, h) {
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '12px ' + PAL.sans;
+    ctx.fillStyle = PAL.faint;
+    var top = h - 108;
+    ctx.fillText('learned merges (rank order):', 12, top);
+    ctx.font = '12px ' + PAL.mono;
+    var x = 12, y = top + 20, gap = 7, lineH = 22, maxX = w - 12;
+    for (var i = 0; i < k; i++) {
+      var st3 = steps[i];
+      var label = (i + 1) + '. ' + disp(st3.a + st3.b);
+      var cw = Math.ceil(ctx.measureText(label).width) + 14;
+      if (x + cw > maxX && x > 12) { x = 12; y += lineH; }
+      if (y > h - 26) { ctx.fillStyle = PAL.faint; ctx.fillText('…', x, y); break; }
+      kit.roundedRect(ctx, x, y - 13, cw, 18, 5);
+      ctx.fillStyle = PAL.blueSoft;
+      ctx.fill();
+      ctx.strokeStyle = PAL.grid;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = PAL.inkStrong;
+      ctx.fillText(label, x + 7, y);
+      x += cw + gap;
+    }
+  }
+
   /* ---------- animation ---------- */
   var loop = kit.animLoop(function (dt) {
+    var sp = level === 'novice' ? 0.9 : speed.value;
     if (trans >= 0) {
-      trans += dt * speed.value * 1.15;
+      trans += dt * sp * 1.15;
       if (trans >= 1) {
         trans = -1;
         k++;
         waitT = 0;
-        if (k >= steps.length) {
+        if (k >= steps.length && level !== 'novice') {
           playing = false;
           playBtn.textContent = 'Play';
         }
       }
     } else if (playing) {
-      waitT += dt * speed.value;
-      if (waitT > 0.45 && k < steps.length) { trans = 0; waitT = 0; }
+      waitT += dt * sp;
+      if (level === 'novice') {
+        /* loop the story: pause on the finished state, then restart */
+        if (k >= steps.length) { if (waitT > 1.8) { k = 0; waitT = 0; } }
+        else if (waitT > 0.45) { trans = 0; waitT = 0; }
+      } else if (waitT > 0.45 && k < steps.length) {
+        trans = 0; waitT = 0;
+      }
     }
     draw();
   });
@@ -203,11 +281,26 @@ Figures.register('fig-bpe-merge', (container, kit) => {
   cv.onResize(draw);
   draw();
 
-  kit.caption(container,
-    'Byte-pair encoding on a tiny corpus: at every step the most ' +
-    'frequent adjacent pair of symbols fuses into a new vocabulary entry. ' +
-    'Because spaces are symbols too, entries like ␣the emerge with ' +
-    'their leading space attached.');
+  if (level === 'novice') {
+    kit.caption(container,
+      'Byte-pair encoding on a tiny sentence, playing by itself: at each step ' +
+      'the pair of neighboring pieces that appears most often glues into one ' +
+      'new piece, over and over, until nothing repeats. Because spaces count ' +
+      'as pieces too, ␣the emerges with its leading space attached.');
+  } else if (level === 'deep') {
+    kit.caption(container,
+      'Byte-pair encoding on a tiny corpus: at every step the most frequent ' +
+      'adjacent pair fuses into a new vocabulary entry, numbered by the rank ' +
+      'in which it was learned. The list tracks the growing vocabulary, and ' +
+      'entries like ␣the emerge with their leading space attached because ' +
+      'spaces are symbols too.');
+  } else {
+    kit.caption(container,
+      'Byte-pair encoding on a tiny corpus: at every step the most ' +
+      'frequent adjacent pair of symbols fuses into a new vocabulary entry. ' +
+      'Because spaces are symbols too, entries like ␣the emerge with ' +
+      'their leading space attached.');
+  }
 
   return loop;
 });

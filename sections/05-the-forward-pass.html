@@ -1,43 +1,111 @@
 <section id="the-forward-pass">
   <h2>The Forward Pass</h2>
 
-  <p>Your prompt is now a stack of vectors — one per token, each a list of a few thousand numbers. What receives them is surprisingly repetitive. A transformer is a tall pile of identical layers, some dozens of them, and every layer holds the same two sublayers. The first is <em>attention</em>, the only place where tokens exchange information with one another. The second is a feed-forward network — an <em>MLP</em>, in fact the bulkier of the two — which transforms each token's vector on its own, ignoring its neighbors. That is essentially the whole architecture, applied over and over.</p>
+  <div class="lv lv-novice">
+    <p>Your words are now long lists of numbers, about to enter the part that does the real thinking. Picture a tall assembly line: the numbers rise through a row of identical stations, and each does the same small job, looking at the work so far and nudging the guess a little closer.</p>
 
-  <p>How the layers connect matters as much as what they compute. Each token's vector flows upward along the <em>residual stream</em>. A sublayer does not replace the vector; it reads it, computes a small correction, and adds that correction back in. The vector leaving the top is the original embedding plus dozens of accumulated refinements — a running draft, never rewritten from scratch. Below, three tokens ride their residual streams through a small eight-layer stack; the slider chooses which to follow, and you can watch each sublayer read its vector and merge a contribution back in:</p>
+    <p>In the demonstration below, follow one word up the stack as each station blends a small change into it.</p>
+  </div>
+
+  <div class="lv lv-mid">
+    <p>Your prompt is now a stack of vectors, one per token. A transformer is a pile of dozens of identical layers, each with the same two sublayers: <em>attention</em>, the only place tokens exchange information, and a feed-forward <em>MLP</em> that transforms each token's vector on its own.</p>
+
+    <p>How they connect matters as much. Each vector flows up the <em>residual stream</em>: a sublayer never replaces it but reads it, adds a small correction, and passes it on, so the vector leaving the top is the embedding plus dozens of refinements. Below, three tokens ride their streams through an eight-layer stack; the slider follows one as each sublayer merges in its contribution.</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p>Your prompt is now a matrix of shape <code>[sequence, d_model]</code>, fed through a stack of identical transformer blocks. The organizing idea is the <em>residual stream</em>: a block never overwrites a token's vector but carries it through, while every sublayer reads a normalized copy, computes an update, and adds it back — writing <code>x</code> for the stream, <code>x = x + attn(norm(x))</code> then <code>x = x + mlp(norm(x))</code>. That uninterrupted identity path lets gradients reach the bottom cleanly in training, so each layer need only learn a correction.</p>
+
+    <p>The norm is typically RMSNorm applied <em>before</em> each sublayer — pre-norm — keeping the stream's scale stable where post-norm drifts. The MLP holds most of the parameters: it projects <code>d_model</code> up to a wider inner dimension, applies a nonlinearity, and projects back, so its weights dwarf the attention weights. Because each vector rises independently, all positions run in parallel, a reason the work suits a GPU. In the demonstration below, the slider picks which of three tokens to follow, and a panel reads off the magnitude &#8214;&Delta;&#8214; that attention and MLP each add.</p>
+  </div>
 
   <div class="figure" id="fig-residual"></div>
 
-  <p>Every token makes this trip at once, all positions in parallel — a large part of why GPUs suit this work.</p>
+  <div class="lv lv-novice">
+    <p>The one place words may look at each other is called attention. Picture a reader on each word; when it is their turn, they glance back over the earlier words and lean on the ones that matter — the reader on "it" looks back for whatever "it" refers to. They may only look backward, since the later words are not chosen yet.</p>
 
-  <h3>Attention</h3>
+    <p>In the demonstration below, hover or tap any word to see which earlier words it looks back at.</p>
+  </div>
 
-  <p>Attention is where the reading happens, and the mechanism is simpler than its reputation. From its current vector, each token computes three new vectors against three learned matrices: a <em>query</em> — "here is what I am looking for" — a <em>key</em> — "here is what I contain" — and a <em>value</em> — "here is what I will hand over if asked." A token's query is compared against the key of every token up to and including itself, one dot product per pair — a single number measuring how well the two vectors line up. Those scores pass through a softmax into positive weights summing to one, and the token pulls in a mixture of the others' values in those proportions — heavily where keys matched its query, faintly elsewhere. That mixture is the correction added to its residual stream.</p>
+  <div class="lv lv-mid">
+    <p>Every token makes this trip at once, all positions in parallel — much of why GPUs suit the work.</p>
 
-  <p>Two details complete the picture. First, causality: a token may attend only to itself and to positions before it, never forward — the future is masked out. Second, each layer runs many of these operations side by side, in separate <em>heads</em>, each with its own query, key, and value matrices. In the demonstration below, hover over or tap any word to see where it directs its attention under three hand-made heads:</p>
+    <h3>Attention</h3>
+
+    <p>Attention is simpler than its reputation. Each token forms three vectors against learned matrices — a <em>query</em> ("what I seek"), a <em>key</em> ("what I hold"), a <em>value</em> ("what I give") — and its query is dotted against the key of every token up to itself. A softmax turns those scores into weights summing to one, and the token pulls in a mixture of the others' values in those proportions, the correction added to its residual stream.</p>
+
+    <p>Two details complete it: a token may attend only to itself and earlier positions, never the future, and each layer runs many such operations in parallel <em>heads</em>. In the demonstration below, hover or tap any word to see where it attends under three hand-made heads.</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p>Attention, the only sublayer that mixes information across positions, is built from three learned projections of the normalized stream: <code>Q = xW_Q</code>, <code>K = xW_K</code>, <code>V = xW_V</code>. The output is the scaled dot-product form <code>softmax(QK&#7488; / &radic;d) V</code>, with <code>d</code> the head dimension: each query dots against every key, the <code>&radic;d</code> divisor keeps the scores from saturating the softmax, and the weights average the values. <em>Causal masking</em> sets future positions' pre-softmax scores to <code>&minus;&infin;</code>, so position <code>i</code> attends only to positions <code>&le; i</code> and can be trained without seeing its future.</p>
+
+    <p>This runs as <em>multi-head</em> attention: the projections split into independent heads, each in its own <code>d</code>-dimensional subspace, so heads specialize in different relations. <em>Grouped-query attention</em>, now common, lets many query heads share one key/value head — barely denting quality while shrinking the key/value footprint several-fold, key to the cache ahead. Order enters here too, not as a position vector at the input but as <em>rotary embeddings</em> (RoPE): each query and key is rotated by an angle proportional to position, so their dot product depends only on relative offset. In the demonstration below, switch between three illustrative heads with the buttons and hover or tap any word to read the softmax weight on each earlier one, with its strongest source called out.</p>
+  </div>
 
   <div class="figure" id="fig-attention"></div>
 
-  <p>The weights here are invented, but the patterns they imitate are routinely found in trained models. Notice what the coreference head does with "it" — most of its weight lands on "test", yet the behavior is just dot products between learned vectors that happened, during training, to make next-token prediction easier.</p>
+  <div class="lv lv-novice">
+    <p>After the words travel up the line, the machine produces one guess at the next word — a ranked list of possibilities with odds, not a finished answer. To pick, it rolls a weighted die rather than always grabbing the favorite, which makes stiff, repetitive writing. A setting called temperature controls how adventurous the roll is.</p>
 
-  <h3>One distribution</h3>
+    <p>In the demonstration below, drag the temperature slider to reshape the odds; the machine keeps rolling on its own.</p>
+  </div>
 
-  <p>At the top of the stack, one more multiplication. The final vector of the <em>last</em> token is projected against the <em>unembedding</em> — a matrix with one row per vocabulary entry — producing one score per token: the <em>logits</em>. A last softmax converts them into probabilities. A machine with billions of parameters has just run end to end across your whole context, and all that work has produced exactly one thing: a probability distribution over the next token. Not an answer — one distribution.</p>
+  <div class="lv lv-mid">
+    <p>The weights above are invented, but the patterns are real — note the coreference head landing most of "it" on "test".</p>
 
-  <p>Something must turn that distribution into a choice. Always taking the most likely token — greedy decoding — produces stilted, repetitive text that falls into loops. Instead, the next token is <em>sampled</em> from the distribution, after reshaping it with a <em>temperature</em>: the logits are divided by <code>T</code> before the softmax. As <code>T</code> approaches zero the distribution sharpens toward its favorite; as it grows it flattens toward noise. A companion trick, <em>top-p</em>, discards the long tail of barely-plausible tokens before sampling. Below, the figure runs real softmax arithmetic on hand-designed logits — drag the temperature slider to reshape the bars, then press Sample to watch the draw pick the next token:</p>
+    <h3>One distribution</h3>
+
+    <p>At the top, one more multiplication. The final vector of the <em>last</em> token is projected against the <em>unembedding</em>, one row per vocabulary entry, giving one score per token — the <em>logits</em> — which a softmax turns into probabilities. Billions of parameters have run across your whole context to produce one distribution over the next token.</p>
+
+    <p>Something must turn it into a choice. Greedy decoding — always taking the top token — falls into repetitive loops, so the next token is <em>sampled</em> after dividing the logits by a <em>temperature</em> <code>T</code>: small <code>T</code> sharpens toward the favorite, large <code>T</code> flattens toward noise. <em>Top-p</em> first drops the long tail of barely-plausible tokens. Below, drag the temperature slider to reshape the bars, toggle top-p, then press Sample to draw the next token.</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p>At the top the residual stream is normalized once more and multiplied by the <em>unembedding</em> matrix, of shape <code>[d_model, vocab]</code> — often the input embedding transposed and reused, saving a large parameter table. For generation only the last position matters: its final vector becomes the <em>logits</em>, one score per vocabulary entry — the entire output of the forward pass, a single unnormalized distribution over the next token.</p>
+
+    <p>Turning it into text is a separate, cheap step. Dividing the logits by a <em>temperature</em> <code>T</code> before the softmax rescales the distribution — <code>T &rarr; 0</code> collapses it toward the argmax, larger <code>T</code> flattens it toward uniform — while <em>top-p</em>, or nucleus, sampling truncates to the smallest set of tokens whose probability sums to <code>p</code>. Greedy decoding, that <code>T &rarr; 0</code> limit, tends to loop, so a modest temperature with top-p is the usual compromise. In the demonstration below, drag the temperature slider and watch genuine softmax arithmetic reshape invented logits — the left column shows each after division by <code>T</code> — toggle top-p to grey out the tail and read its cutoff, then press Sample to draw a token.</p>
+  </div>
 
   <div class="figure" id="fig-sampling"></div>
 
-  <p>One token is chosen and appended — then the whole forward pass runs again on the longer context for the next distribution. Every visible word of a reply is produced this way, one token at a time.</p>
+  <div class="lv lv-novice">
+    <p>Choosing one word is only the start: the whole trip must happen again for the next, and again after that. Redoing it all each time would be wasteful, so the machine keeps a growing pile of notes about every word it has read and reuses them.</p>
 
-  <h3>The KV cache</h3>
+    <p>In the demonstration below, watch the pile of notes grow by one note per word, and flip the switch to see the work it saves.</p>
+  </div>
 
-  <p>"Runs again" should worry you. To produce token <code>N + 1</code>, attention needs the keys and values of all <code>N</code> earlier tokens — and naively, every step would recompute them all, though they depend only on the unchanged prefix. So they are computed once and kept: every token's keys and values, for every layer and head, held in accelerator memory as the <em>KV cache</em>. Each step computes a query, key, and value for the newest token alone, attends over the cached rest, and appends its own K and V.</p>
+  <div class="lv lv-mid">
+    <p>One token is chosen and appended, and the whole pass runs again on the longer context for the next — every word of a reply, one at a time.</p>
 
-  <p>This one optimization shapes the economics you feel as a user. The cache is large — a few hundred kilobytes per token for a big model, so a long agent session runs to gigabytes — and on every step it must be streamed out of memory, along with the model's weights, which are far larger still. Moving all those bytes, not the arithmetic, is what limits generation speed, and the growing cache is why long contexts respond more slowly and cost more. It is also, in essence, what prompt caching — which we met in the datacenter section — preserves between calls of the agent loop: the prefix's computed state stays warm so the next request need not rebuild it. Below, watch the cache grow one column per step, and flip the toggle to see what the naive world would recompute:</p>
+    <h3>The KV cache</h3>
+
+    <p>"Runs again" should worry you. To produce token <code>N + 1</code>, attention needs the keys and values of all <code>N</code> earlier tokens, which depend only on the unchanged prefix — so they are computed once and kept in memory as the <em>KV cache</em>. Each step computes a query, key, and value for the newest token alone, attends over the cached rest, and appends its own.</p>
+
+    <p>This shapes the economics you feel. The cache is large — a few hundred kilobytes per token, so a long session runs to gigabytes — and every step must stream it, and the far larger weights, out of memory. Moving those bytes, not the arithmetic, limits generation speed and is why long contexts are slower and costlier; prompt caching keeps that state warm between turns. Below, watch the cache grow one column per step, and flip the toggle to see what the naive world recomputes.</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p>Producing each token re-runs the whole stack, but the prefix's keys and values never change, so recomputing them is waste. They are computed once and retained — the <em>KV cache</em> — and each step projects <code>Q</code>, <code>K</code>, <code>V</code> for the newest token alone, attends over the cached history, and appends its own. The cache size per token is about <code>2 &times; layers &times; kv_heads &times; head_dim &times; bytes</code>, the leading <code>2</code> for keys and values alike.</p>
+
+    <p>Take 80 layers, 8 key/value heads after grouped-query attention, head dimension 128, in 2-byte <code>bf16</code>: <code>2 &times; 80 &times; 8 &times; 128 &times; 2 &approx; 320 KB</code> per token, so a 100,000-token context holds roughly 32 GB of cache beside the weights. Without grouped-query attention — say 64 key/value heads — it would need eight times as much. The sizes are illustrative; the consequence is general: generation is bound by <em>memory bandwidth</em>, not arithmetic. Every step streams the weights and the whole cache out of high-bandwidth memory, and moving those bytes sets the pace — why long contexts cost more and run slower. Prompt caching keeps that state warm between turns. In the demonstration below, watch the cache grow one column per step, read the per-token size and running total, and toggle the view to see what the cacheless version recomputes.</p>
+  </div>
 
   <div class="figure" id="fig-kvcache"></div>
 
-  <p class="note">Production models refine this picture in ways we are skipping: grouped-query attention shares keys and values across heads to shrink the cache, mixture-of-experts layers route each token to a subset of the MLP weights, and speculative decoding drafts several tokens cheaply and verifies them in one pass. We are also skipping how the model knows token order: position information is mixed into the queries and keys — in modern models by rotating them as a function of position, a scheme called RoPE — which is what lets a head prefer "the previous token" at all. None of it changes the shape of the story here.</p>
+  <div class="lv lv-novice">
+    <p>Either way, a brand-new word now exists that did not a moment ago, and it still has to find its way back out of the datacenter and onto your screen.</p>
+  </div>
 
-  <p>However the details fall, at the end of the pass there now exists a token id that did not exist a moment ago — and it has to make its way back out of the datacenter to your terminal.</p>
+  <div class="lv lv-mid">
+    <p class="note">Production models add refinements we skip: grouped-query attention shares keys and values across heads to shrink the cache, mixture-of-experts layers route each token to a subset of the MLP weights, and speculative decoding drafts several tokens cheaply and verifies them in one pass. Token order enters by rotating the queries and keys by position, a scheme called RoPE. None of it changes the shape of the story.</p>
+
+    <p>Either way, the pass has produced a token id that did not exist a moment ago — and it must make its way back out of the datacenter to your terminal.</p>
+  </div>
+
+  <div class="lv lv-deep">
+    <p class="note">Several refinements are folded in or omitted. Mixture-of-experts layers replace the single MLP with many, routing each token to a small subset and raising parameter count without proportional compute; speculative decoding drafts several tokens cheaply and verifies them in one pass. The specifics here — layer and head counts, RoPE, grouped-query attention — are typical of modern transformers, not claims about any production model, whose internals are not public. None of it changes the shape of the story.</p>
+
+    <p>Whatever the configuration, the pass has yielded a token id that did not exist a moment ago, and it has to travel back out of the datacenter to your terminal.</p>
+  </div>
 </section>
