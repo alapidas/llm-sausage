@@ -153,13 +153,6 @@ Figures.register('fig-tokenizer', (container, kit) => {
   input.type = 'text';
   input.spellcheck = false;
   input.autocomplete = 'off';
-  input.style.fontFamily = PAL.mono;
-  input.style.fontSize = '16px';
-  /* No .fig-input rule exists in the stylesheet, so the box would otherwise
-     take the browser's own field colors; anchor it to the palette so it
-     follows the theme like the token area below it. */
-  input.style.background = PAL.bg;
-  input.style.color = PAL.inkStrong;
   input.setAttribute('aria-label', 'Text to tokenize');
   container.appendChild(input);
 

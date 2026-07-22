@@ -65,7 +65,12 @@ Figures.register('fig-residual', (container, kit) => {
     const left = 58;
     const right = 16;
     const top = 44;
-    const bottom = h - 42;
+    /* The token names sit at nameY. The vector strip is 30px tall and starts
+       its climb 16px below the stack, so the stack has to end far enough up
+       that the strip's lowest edge clears the names instead of crossing
+       them. */
+    const nameY = h - 22;
+    const bottom = nameY - 48;
     const blockW = w - left - right;
     const gap = 6;
     const blockH = (bottom - top - gap * (L - 1)) / L;
@@ -83,7 +88,7 @@ Figures.register('fig-residual', (container, kit) => {
     for (let i = 0; i < LANES; i++) laneX.push(left + blockW * (i + 1) / (LANES + 1));
     return {
       w: w, h: h, left: left, top: top, bottom: bottom, blockW: blockW,
-      blocks: blocks, laneX: laneX,
+      blocks: blocks, laneX: laneX, nameY: nameY,
       yStart: bottom + 16, yEnd: top - 14,
     };
   }
@@ -256,7 +261,7 @@ Figures.register('fig-residual', (container, kit) => {
     ctx.textAlign = 'center';
     for (let i = 0; i < LANES; i++) {
       ctx.fillStyle = i === selLane ? PAL.inkStrong : PAL.faint;
-      ctx.fillText('“' + NAMES[i] + '”', g.laneX[i], g.h - 22);
+      ctx.fillText('“' + NAMES[i] + '”', g.laneX[i], g.nameY);
     }
   }
 
