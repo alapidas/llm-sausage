@@ -26,63 +26,63 @@
    white page that is a darker shade, on a dark page a lighter one.
    Keep in sync with the CSS custom properties in css/style.css. */
 const PAL_LIGHT = {
-  ink:      '#3d4148',
-  inkStrong:'#24272c',
-  faint:    '#6b727a',
-  grid:     '#e3e6ea',
-  bg:       '#ffffff',
-  blue:     '#4a90d9',
-  blueDark: '#2f6bb0',
-  orange:   '#e8833a',
-  orangeDark: '#b25e15',
-  green:    '#55a868',
-  greenDark: '#3f7d51',
-  red:      '#d1605e',
-  redDark:  '#b23b39',
-  purple:   '#8172b3',
-  yellow:   '#e0b13e',
-  teal:     '#4db6ac',
-  blueSoft:   '#dcecfa',
-  orangeSoft: '#fbe8d8',
-  greenSoft:  '#def0e2',
-  redSoft:    '#f8e0df',
-  purpleSoft: '#e8e3f3',
-  graySoft:   '#f2f3f5',
+  ink:      '#3a352d',
+  inkStrong:'#1f1b15',
+  faint:    '#7a7264',
+  grid:     '#e5ddcf',
+  bg:       '#fdfaf4',
+  blue:     '#3f7099',
+  blueDark: '#2b5273',
+  orange:   '#c0653a',
+  orangeDark: '#96461f',
+  green:    '#6b8f5a',
+  greenDark: '#4e6b40',
+  red:      '#b04a3f',
+  redDark:  '#8c342b',
+  purple:   '#77618f',
+  yellow:   '#c0912e',
+  teal:     '#3f9a92',
+  blueSoft:   '#e2ecf3',
+  orangeSoft: '#f7e6d8',
+  greenSoft:  '#e8eddd',
+  redSoft:    '#f6e2dc',
+  purpleSoft: '#ece5f0',
+  graySoft:   '#f3ede1',
   /* Terminal/screen slab. Stays dark in BOTH themes — a terminal is dark
      even on a dark page — so accents drawn on it keep their contrast.
      `panelEdge` matches the slab in light (invisible) and outlines it in
      dark, where the slab alone would blend into the page. */
-  panel:     '#24272c',
-  panelInk:  '#f2f3f5',
-  panelEdge: '#24272c',
+  panel:     '#201c16',
+  panelInk:  '#f3ede1',
+  panelEdge: '#201c16',
 };
 
 const PAL_DARK = {
-  ink:      '#c3c9d1',
-  inkStrong:'#e9edf2',
-  faint:    '#8d959f',
-  grid:     '#2f343b',
-  bg:       '#181b1f',
-  blue:     '#6aa9e8',
-  blueDark: '#9ecbf5',
-  orange:   '#efa066',
-  orangeDark: '#f5c091',
-  green:    '#6fbf85',
-  greenDark: '#98d5a9',
-  red:      '#e08381',
-  redDark:  '#eda3a2',
-  purple:   '#a598d1',
-  yellow:   '#e5c163',
-  teal:     '#5ec8be',
-  blueSoft:   '#1d2f42',
-  orangeSoft: '#382a1d',
-  greenSoft:  '#1e3326',
-  redSoft:    '#392426',
-  purpleSoft: '#2b2740',
-  graySoft:   '#23272d',
-  panel:     '#101216',
-  panelInk:  '#e9edf2',
-  panelEdge: '#343b44',
+  ink:      '#d3cabb',
+  inkStrong:'#f4eee2',
+  faint:    '#988e7f',
+  grid:     '#2f2920',
+  bg:       '#16130f',
+  blue:     '#74a5cc',
+  blueDark: '#a3c8e4',
+  orange:   '#dd9061',
+  orangeDark: '#edb389',
+  green:    '#93b881',
+  greenDark: '#b4d0a4',
+  red:      '#d4837a',
+  redDark:  '#e6a79f',
+  purple:   '#a893bd',
+  yellow:   '#d5b258',
+  teal:     '#63bcb3',
+  blueSoft:   '#1b2833',
+  orangeSoft: '#322418',
+  greenSoft:  '#232b1d',
+  redSoft:    '#33221e',
+  purpleSoft: '#29222f',
+  graySoft:   '#221e17',
+  panel:     '#100e0b',
+  panelInk:  '#f4eee2',
+  panelEdge: '#3b342a',
 };
 
 window.PAL = {
@@ -90,9 +90,40 @@ window.PAL = {
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 };
 
+/* PAL key -> CSS custom property. The stylesheet is the single source of
+   truth for color, so a theme is one CSS file and the canvases follow it;
+   PAL_LIGHT/PAL_DARK above are only the fallback when a property is absent
+   (stylesheet still loading, or a theme that forgot to declare one). */
+const PAL_VARS = {
+  ink: '--ink', inkStrong: '--ink-strong', faint: '--faint', grid: '--grid',
+  bg: '--bg',
+  blue: '--blue', blueDark: '--blue-dark',
+  orange: '--orange', orangeDark: '--orange-dark',
+  green: '--green', greenDark: '--green-dark',
+  red: '--red', redDark: '--red-dark',
+  purple: '--purple', yellow: '--yellow', teal: '--teal',
+  blueSoft: '--blue-soft', orangeSoft: '--orange-soft',
+  greenSoft: '--green-soft', redSoft: '--red-soft',
+  purpleSoft: '--purple-soft', graySoft: '--gray-soft',
+  panel: '--panel', panelInk: '--panel-ink', panelEdge: '--panel-edge',
+  sans: '--fig-sans', mono: '--fig-mono',
+};
+
 /* Mutate PAL in place so figures holding a reference see the new colors. */
 window.applyPalette = theme => {
-  Object.assign(window.PAL, theme === 'dark' ? PAL_DARK : PAL_LIGHT);
+  const fallback = theme === 'dark' ? PAL_DARK : PAL_LIGHT;
+  const cs = getComputedStyle(document.documentElement);
+  const next = {};
+  for (const key in PAL_VARS) {
+    /* Collapse whitespace: a font stack declared across several lines in the
+       stylesheet comes back with the newlines intact, and a `ctx.font` string
+       that fails to parse is silently ignored — leaving every label at the
+       canvas default of 10px. */
+    const v = cs.getPropertyValue(PAL_VARS[key]).replace(/\s+/g, ' ').trim();
+    if (v) next[key] = v;
+    else if (fallback[key]) next[key] = fallback[key];
+  }
+  Object.assign(window.PAL, next);
 };
 
 /* Effective theme: an explicit choice wins, otherwise follow the system. */
@@ -495,12 +526,22 @@ window.Figures = (() => {
       else if (mq.addListener) mq.addListener(onChange);
     }
 
-    /* Print stylesheet forces light; repaint the canvases to match. */
+    /* Print stylesheet forces light; repaint the canvases to match. PAL now
+       reads the live custom properties, which at beforeprint still resolve to
+       the screen theme — so force the light attribute for the duration and
+       put back whatever was there (possibly nothing) afterwards. */
+    let printedTheme = null;
     window.addEventListener('beforeprint', () => {
+      printedTheme = html.getAttribute('data-theme');
+      html.setAttribute('data-theme', 'light');
       window.applyPalette('light');
       if (window.Figures && window.Figures.reinit) window.Figures.reinit();
     });
-    window.addEventListener('afterprint', repaint);
+    window.addEventListener('afterprint', () => {
+      if (printedTheme === null) html.removeAttribute('data-theme');
+      else html.setAttribute('data-theme', printedTheme);
+      repaint();
+    });
 
     const theme = window.currentTheme();
     btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
