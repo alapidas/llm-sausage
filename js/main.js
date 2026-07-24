@@ -361,18 +361,26 @@ window.Figures = (() => {
     const el = document.getElementById(id);
     if (!el) { console.warn('missing figure container:', id); return; }
 
-    /* Teardown a previous instance (re-init on reading-level switch). */
-    if (el.__figInstance) {
-      try { el.__figInstance.stop && el.__figInstance.stop(); }
-      catch (err) { console.error(err); }
-      io.unobserve(el);
-      el.__figInstance = null;
-      el.innerHTML = '';
+    /* Always tear down and empty the container before (re-)running setup, even
+       when __figInstance is unset. A previous setup that threw after appending
+       its canvas/controls leaves orphaned DOM with no instance recorded; if we
+       skipped the clear in that case, the next init would append a second copy
+       and the figure would render twice. Unobserving/clearing an untouched
+       container is a harmless no-op on the first init. */
+    if (el.__figInstance && el.__figInstance.stop) {
+      try { el.__figInstance.stop(); } catch (err) { console.error(err); }
     }
+    io.unobserve(el);
+    el.__figInstance = null;
+    el.innerHTML = '';
 
     let inst = null;
     try { inst = setup(el, window.FigKit) || {}; }
-    catch (err) { console.error('figure "' + id + '" failed to init:', err); return; }
+    catch (err) {
+      console.error('figure "' + id + '" failed to init:', err);
+      el.innerHTML = '';   /* drop any partial DOM the failed setup appended */
+      return;
+    }
     el.__figInstance = inst;
 
     const isLoop = inst && typeof inst.start === 'function' && typeof inst.stop === 'function';
