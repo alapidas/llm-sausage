@@ -1,7 +1,53 @@
 <section id="the-request">
   <h2>The Request</h2>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-short">
+    <p>When you press Enter, your message is packed up like a letter and sent to
+    Anthropic&rsquo;s computers, which do the thinking and reply. Because those computers keep
+    no memory, every letter carries the whole conversation so far, plus a label proving it is
+    from you so only your account is charged. Before the letter goes out, the two computers
+    exchange a quick greeting and agree on a secret code; from then on everything is sealed, so
+    anyone who intercepted it would find only scrambled nonsense&nbsp;&mdash; which is why it is
+    safe to send Claude your private notes. The sealed letter is broken into pieces that hop
+    from machine to machine across the internet, none able to read what is inside, until they
+    reach Anthropic&rsquo;s front door. That door is where we go next.</p>
+  </div>
+
+  <div class="lv lv-mid len-short">
+    <p>The CLI has serialized everything the model needs into one JSON document, and it leaves
+    your machine as an ordinary HTTPS <code>POST</code> to
+    <code>https://api.anthropic.com/v1/messages</code>. No private tunnel: a web request like
+    your browser makes all day, only larger. The body carries <code>model</code>,
+    <code>max_tokens</code> (a cap on the reply, not a target), <code>system</code>, the
+    <code>messages</code> array of alternating turns, the <code>tools</code> and their schemas,
+    and <code>stream: true</code>; headers prove who is asking. Before the first byte, DNS
+    resolves the hostname to a nearby edge network, TCP handshakes, and TLS&nbsp;1.3 establishes
+    shared keys in one round trip, so your API key and source never cross the wire in readable
+    form. The request then travels hop by hop as encrypted packets&nbsp;&mdash; each router reads
+    only the address, never the contents&nbsp;&mdash; bounded by physics, since light in fiber
+    costs tens of milliseconds across a continent. Next, it reaches Anthropic&rsquo;s front
+    door.</p>
+  </div>
+
+  <div class="lv lv-deep len-short">
+    <p>The document leaves as a single HTTP <code>POST</code> to
+    <code>https://api.anthropic.com/v1/messages</code> over HTTP/2 inside TLS. The JSON is the
+    public Messages API shape; because the endpoint is stateless it is the whole world the
+    model sees&nbsp;&mdash; <code>model</code>, a server-enforced <code>max_tokens</code>
+    ceiling, <code>system</code>, <code>messages</code> as alternating turns (tool output
+    returns as a <code>tool_result</code> block in the next user turn), <code>tools</code> with
+    JSON Schema, and <code>stream: true</code>. Prompt caching rides here too:
+    <code>cache_control</code> breakpoints let the server serve a matching prefix from cache,
+    the match a strict prefix over <code>tools</code>, <code>system</code>, <code>messages</code>.
+    First DNS, typically to an anycast edge; then TCP; then TLS&nbsp;1.3, whose ClientHello
+    carries an ephemeral <code>key_share</code> (usually X25519) so both sides derive the same
+    secret in one round trip, with forward secrecy. Packets then cross your ISP, the backbone,
+    and the edge, every router forwarding on the IP header alone; the payload is opaque
+    ciphertext, but its sizes and timing still leak the shape of the streamed reply, and latency
+    has a hard floor of about 200&nbsp;km per millisecond in fiber. Next, the front door.</p>
+  </div>
+
+  <div class="lv lv-novice len-long">
     <p>When you type a message to Claude and press enter, it does not stay on your computer. It is packed up like a letter and sent to Anthropic's computers, which do the thinking and reply; your machine is just the envelope-stuffer and the mail slot.</p>
 
     <p>The computers that answer keep no memory, so every time you write, the program folds the whole conversation so far — your new message and every earlier turn — back into the envelope. A label proving the letter is from you rides along, so only your account is charged.</p>
@@ -9,7 +55,7 @@
     <p>Below, hover over or tap the parts of one such letter to see what each is for; a real one is far too long, so the sample is short.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>The CLI has serialized everything the model needs into one JSON document, and it leaves your machine as an ordinary HTTPS <code>POST</code> to <code>https://api.anthropic.com/v1/messages</code> — the endpoint every program using the Claude API hits. No private tunnel, no special protocol: a web request like your browser makes all day, only larger and longer-lived.</p>
 
     <p>The server keeps no memory between calls, so everything the model will know arrives in this one body. <code>model</code> names which model answers; <code>max_tokens</code> caps how long the reply may grow, a stop condition rather than a target; <code>system</code> carries the CLI's standing instructions; and <code>messages</code> is the conversation, an array of <code>user</code> and <code>assistant</code> turns that alternate strictly because every tool result returns as the next user turn, a <code>tool_result</code> block. <code>tools</code> lists every tool the model may request, each with a JSON Schema, and <code>stream</code> is <code>true</code>. Alongside ride the headers: <code>x-api-key</code> (or an OAuth bearer token for subscription sign-ins) proves who is asking, <code>anthropic-version</code> pins behavior to a date, and <code>content-type</code> declares the body JSON.</p>
@@ -17,7 +63,7 @@
     <p>In the figure below, hover over or tap each highlighted part of an abbreviated request to see what it is for; a real body runs to hundreds of kilobytes, so the long strings are elided.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>The document leaves as a single HTTP <code>POST</code> to <code>https://api.anthropic.com/v1/messages</code>, over HTTP/2 inside a TLS connection we open in a moment. The body is JSON in the public Messages API shape every SDK serializes to; because the endpoint is stateless it is the whole world the model sees. <code>model</code> selects the model; <code>max_tokens</code> is a hard output ceiling, enforced server-side and invisible to the model; <code>system</code> holds the standing instructions; <code>messages</code> is the conversation as <code>user</code> and <code>assistant</code> turns. Tool output is not a distinct role — a result returns in the next <code>user</code> turn as a <code>tool_result</code> block keyed to its <code>tool_use</code> id, which is why turns alternate strictly. <code>tools</code> carries each tool's name, description, and JSON Schema, and <code>stream</code> is <code>true</code> so the reply arrives incrementally.</p>
 
     <p>One field family changes the economics of the agentic loop: prompt caching. Attaching <code>cache_control</code> breakpoints of type <code>ephemeral</code> to content blocks lets the server serve a matching prefix from cache instead of reprocessing it. The match is a strict prefix — the prompt is hashed in the fixed order <code>tools</code>, <code>system</code>, <code>messages</code>, and one differing byte before a breakpoint invalidates everything after — so a well-behaved CLI keeps the stable head byte-identical and appends only at the end. You get up to four breakpoints, and <code>usage</code> reports <code>cache_read_input_tokens</code> and <code>cache_creation_input_tokens</code> to confirm hits; how Anthropic stores those prefixes internally is not public. Three headers ride alongside: <code>x-api-key</code> or an <code>Authorization: Bearer</code> token, <code>anthropic-version</code>, and <code>content-type</code>.</p>
@@ -25,15 +71,72 @@
     <p>Below, hover over or tap each highlighted part to read what it does and its rough size in bytes and tokens, with a line totalling the roughly 150-kilobyte body whose long strings — system prompt, tool schemas, history — are elided.</p>
   </div>
 
-  <div class="figure" id="fig-request-json"></div>
+  <div class="lv lv-novice len-medium">
+    <p>When you type a message to Claude and press Enter, it does not stay on your computer. It
+    is packed up like a letter and sent to Anthropic&rsquo;s computers, which do the thinking
+    and reply; your machine is just the envelope-stuffer and the mail slot. The computers that
+    answer keep no memory, so every time you write, the program folds the whole conversation so
+    far&nbsp;&mdash; your new message and every earlier turn&nbsp;&mdash; back into the envelope.
+    A label proving the letter is from you rides along, so only your account is charged. Below,
+    hover over or tap the parts of one such letter to see what each is for; a real one is far
+    too long, so the sample is short.</p>
+  </div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-mid len-medium">
+    <p>The CLI has serialized everything the model needs into one JSON document, and it leaves
+    your machine as an ordinary HTTPS <code>POST</code> to
+    <code>https://api.anthropic.com/v1/messages</code>&nbsp;&mdash; the endpoint every program
+    using the Claude API hits. No private tunnel, no special protocol: a web request like your
+    browser makes all day, only larger and longer-lived. The server keeps no memory between
+    calls, so everything the model will know arrives in this one body. <code>model</code> names
+    which model answers; <code>max_tokens</code> caps how long the reply may grow, a stop
+    condition rather than a target; <code>system</code> carries the CLI&rsquo;s standing
+    instructions; and <code>messages</code> is the conversation, an array of <code>user</code>
+    and <code>assistant</code> turns that alternate strictly because every tool result returns
+    as the next user turn. <code>tools</code> lists every tool the model may request, each with
+    a JSON Schema, and <code>stream</code> is <code>true</code>. Alongside ride the headers:
+    <code>x-api-key</code> (or an OAuth bearer token for subscription sign-ins) proves who is
+    asking, <code>anthropic-version</code> pins behavior to a date, and <code>content-type</code>
+    declares the body JSON. In the figure below, hover over or tap each highlighted part of an
+    abbreviated request to see what it is for; a real body runs to hundreds of kilobytes, so
+    the long strings are elided.</p>
+  </div>
+
+  <div class="lv lv-deep len-medium">
+    <p>The document leaves as a single HTTP <code>POST</code> to
+    <code>https://api.anthropic.com/v1/messages</code>, over HTTP/2 inside a TLS connection. The
+    body is JSON in the public Messages API shape every SDK serializes to; because the endpoint
+    is stateless it is the whole world the model sees. <code>model</code> selects the model;
+    <code>max_tokens</code> is a hard output ceiling, enforced server-side and invisible to the
+    model; <code>system</code> holds the standing instructions; <code>messages</code> is the
+    conversation as <code>user</code> and <code>assistant</code> turns. Tool output is not a
+    distinct role&nbsp;&mdash; a result returns in the next <code>user</code> turn as a
+    <code>tool_result</code> block keyed to its <code>tool_use</code> id, which is why turns
+    alternate strictly. <code>tools</code> carries each tool&rsquo;s name, description, and JSON
+    Schema, and <code>stream</code> is <code>true</code>. One field family changes the economics
+    of the agentic loop: prompt caching. Attaching <code>cache_control</code> breakpoints of type
+    <code>ephemeral</code> lets the server serve a matching prefix from cache instead of
+    reprocessing it. The match is a strict prefix&nbsp;&mdash; the prompt is hashed in the fixed
+    order <code>tools</code>, <code>system</code>, <code>messages</code>, and one differing byte
+    before a breakpoint invalidates everything after&nbsp;&mdash; so a well-behaved CLI keeps the
+    stable head byte-identical and appends only at the end. You get up to four breakpoints, and
+    <code>usage</code> reports <code>cache_read_input_tokens</code> and
+    <code>cache_creation_input_tokens</code> to confirm hits. Three headers ride alongside:
+    <code>x-api-key</code> or an <code>Authorization: Bearer</code> token,
+    <code>anthropic-version</code>, and <code>content-type</code>. Below, hover over or tap each
+    highlighted part to read what it does and its rough size in bytes and tokens, with a line
+    totalling the roughly 150-kilobyte body whose long strings are elided.</p>
+  </div>
+
+  <div class="figure figlen-medium" id="fig-request-json"></div>
+
+  <div class="lv lv-novice len-long">
     <p>Before the letter goes out, your computer and Anthropic's exchange a quick greeting and agree on a secret code only the two of them know. From then on everything is sealed: anyone who opened the envelope along the way would find only scrambled nonsense, which is why it is safe to send Claude your private notes.</p>
 
     <p>Below, watch the greeting play out while a counter tallies the delay, then flip the switch: a follow-up message skips the greeting, because the two computers already know each other.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <h3>Before the first byte</h3>
 
     <p>A name is not an address, so first comes DNS: your machine asks a resolver what IP <code>api.anthropic.com</code> maps to, and the answer usually belongs not to one datacenter but to an edge network whose points of presence worldwide route the address near you. Then your machine opens a TCP connection — SYN, SYN-ACK, ACK — a round trip that gives both sides agreed sequence numbers, so lost or reordered packets can be repaired later.</p>
@@ -41,7 +144,7 @@
     <p>In TLS 1.3 your machine sends a ClientHello carrying its half of a key exchange; the server answers with its own half, a certificate proving it is <code>api.anthropic.com</code>, and a Finished message, all in one flight. Your machine verifies the certificate, sends its own Finished, and attaches encrypted application data to that same flight. One round trip, and both ends hold symmetric keys no eavesdropper can derive — which is why your API key and your source code never cross the internet in readable form. The demonstration below replays this as a sequence diagram, a clock adding a plausible 30&nbsp;ms per round trip; flip the toggle to reuse an open connection and everything above the final arrow disappears.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>A hostname is not a route, so the first work is DNS: your resolver walks the delegation chain and returns <code>A</code> and <code>AAAA</code> records for <code>api.anthropic.com</code>. Large public endpoints are typically fronted by anycast — the same IP announced into BGP from many points of presence at once, the routing fabric delivering your packets to whichever is closest in network terms. Which networks announce it, and where they terminate the connection, is not public for Anthropic specifically; this is how large API services are commonly fronted. TCP then handshakes — SYN, SYN-ACK, ACK — establishing sequence numbers so loss and reordering can be repaired.</p>
 
     <p>TLS 1.3 then secures the channel in one round trip. The ClientHello carries a <code>key_share</code> — your half of an ephemeral Diffie-Hellman exchange, typically over X25519 — and the server replies with its own, from which both sides derive the same secret, followed by its certificate chain and a Finished, now encrypted. Your machine validates that chain to a trusted root, confirms the certificate's subject-alternative-name list covers the host, and appends encrypted application data to the same flight. The ephemeral keys give forward secrecy; a resumed session reuses a pre-shared-key ticket to collapse the handshake further. One detail worth naming: the Server Name Indication — the cleartext <code>api.anthropic.com</code> in the ClientHello — stays visible unless Encrypted Client Hello is used.</p>
@@ -51,13 +154,13 @@
 
   <div class="figure" id="fig-tls"></div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-long">
     <p>The sealed letter does not travel in one piece: it is broken up, and each piece is passed from machine to machine — your home router, your provider's equipment, a chain of big routers forming the internet's backbone. Every machine reads the address outside; none can read what is sealed inside.</p>
 
     <p>None can beat distance: the pieces move at nearly the speed of light, yet crossing an ocean takes noticeably longer than crossing a city. Below, follow a piece along its route, tap any machine to see what it may read, and slide from a nearby to a faraway destination to feel how distance adds to the wait.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>That toggle matters: an agentic session is a loop — the model asks for a tool, the CLI runs it and sends the result back — so HTTP keep-alive holds the connection open, and every request after the first skips DNS and both handshakes.</p>
 
     <h3>Hop by hop</h3>
@@ -67,7 +170,7 @@
     <p>This has a hard floor: light in fiber travels about 200&nbsp;km per millisecond, so crossing a continent costs tens of milliseconds — which is why edge networks terminate close to you. Below, watch a packet make the trip, hover over or tap any node to see what it can read, and drag the slider from same-city to trans-oceanic distances to feel geography dominate the total.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>Over that connection the CLI speaks HTTP/2: the request becomes binary frames, headers are compressed with HPACK, and the whole agentic loop — request, tool call, result, next request — is multiplexed over the single kept-alive connection, so every turn after the first pays only one-way travel rather than another setup. Each frame is split into IP packets that cross your ISP's access and aggregation layers, the backbone, and the edge terminating your session. Every router forwards on the destination address in the IP header alone, decrementing the TTL, with the route between autonomous systems chosen by BGP over peering and transit links.</p>
 
     <p>To all of them the payload is opaque ciphertext, which hides the contents — your key, your code, the model's tokens — but not the metadata. Because the response streams token by token, the sizes and timing of the ciphertext frames trace the shape of the generation, so an observer counting bytes and clocking arrivals learns roughly how long the answer is and how fast it comes; padding and framing blunt this without erasing it. Latency, meanwhile, has a floor set by physics: light in fiber moves about 200&nbsp;km per millisecond, so a transcontinental leg costs tens of milliseconds — the reason terminating your connection near you is worth the trouble.</p>
@@ -77,19 +180,72 @@
 
   <div class="figure" id="fig-journey"></div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-long">
     <p>The letter has reached Anthropic's front door, where a very busy building must decide, in the blink of an eye, who opens it — and that is where we go next.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p class="note">We drew five hops; a real <code>traceroute</code> typically shows ten to twenty, and the machinery fronting <code>api.anthropic.com</code> — which networks announce it, where TLS is terminated — is not public. This is the common shape of large API fronting; the physics is the same either way.</p>
 
     <p>Because the request said <code>stream: true</code>, the response is not one document delivered when the model finishes but a long-lived HTTP response carrying server-sent events, the connection staying open for the whole generation; we unpack it in the final section. For now the packets have reached Anthropic's front door, where a large-scale inference service has a few milliseconds to decide what to do with them.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p class="note">The figure draws five hops; a real <code>traceroute</code> usually shows ten to twenty, and what sits in front of <code>api.anthropic.com</code> — which networks originate the anycast route, where TLS is terminated — is not public. This is the common shape of large API fronting; the physics is invariant.</p>
 
     <p>Because the request set <code>stream: true</code>, the response is not one buffered document but a long-lived reply carrying server-sent events over the same HTTP/2 stream — <code>message_start</code>, a run of <code>content_block_delta</code> events, and finally <code>message_stop</code> — held open for the whole generation. We unpack it in the final section. For now the packets have crossed the front door, and a large-scale inference service has a few milliseconds to decide what to do with them.</p>
+  </div>
+
+  <div class="lv lv-novice len-medium">
+    <p>Before the letter goes out, your computer and Anthropic&rsquo;s exchange a quick greeting
+    and agree on a secret code only the two of them know. From then on everything is sealed:
+    anyone who opened the envelope along the way would find only scrambled nonsense, which is
+    why it is safe to send Claude your private notes. The sealed letter does not travel in one
+    piece&nbsp;&mdash; it is broken up, and each piece is passed from machine to machine, your
+    home router, your provider&rsquo;s equipment, a chain of big routers forming the
+    internet&rsquo;s backbone. Every machine reads the address outside; none can read what is
+    sealed inside. None can beat distance, either: the pieces move at nearly the speed of light,
+    yet crossing an ocean takes noticeably longer than crossing a city. The pieces have reached
+    Anthropic&rsquo;s front door, where we go next.</p>
+  </div>
+
+  <div class="lv lv-mid len-medium">
+    <p>Before the first byte, a name must become an address: DNS resolves
+    <code>api.anthropic.com</code>, usually to an edge network whose points of presence route
+    the address near you. Then TCP handshakes, and TLS&nbsp;1.3 secures the channel in one round
+    trip&nbsp;&mdash; the ClientHello carries half of a key exchange, the server replies with its
+    half, a certificate proving its identity, and a Finished, and both ends hold symmetric keys
+    no eavesdropper can derive. That is why your API key and your source code never cross the
+    internet in readable form. Because an agentic session is a loop, HTTP keep-alive holds the
+    connection open, so every request after the first skips DNS and both handshakes. Split into
+    packets, the request then travels a path you never see; each router reads only the IP header
+    and forwards on, the payload opaque ciphertext. This has a hard floor: light in fiber travels
+    about 200&nbsp;km per millisecond, so crossing a continent costs tens of
+    milliseconds&nbsp;&mdash; why edge networks terminate close to you. Because the request said
+    <code>stream: true</code>, the reply will arrive not as one document but as a long-lived
+    stream of server-sent events, which we unpack in the final section. For now, the packets have
+    reached Anthropic&rsquo;s front door.</p>
+  </div>
+
+  <div class="lv lv-deep len-medium">
+    <p>A hostname is not a route, so the first work is DNS, typically resolving to an anycast
+    address announced from many points of presence at once. TCP then handshakes, and TLS&nbsp;1.3
+    secures the channel in one round trip: the ClientHello carries a <code>key_share</code>&nbsp;&mdash;
+    your half of an ephemeral Diffie-Hellman exchange, usually over X25519&nbsp;&mdash; and the
+    server replies with its own, its certificate chain, and an encrypted Finished; your machine
+    validates the chain to a trusted root and appends encrypted application data to the same
+    flight. The ephemeral keys give forward secrecy; a resumed session collapses the handshake
+    with a pre-shared-key ticket, and because the agent loop keeps the connection alive, every
+    turn after the first pays only one-way travel. One detail worth naming: the Server Name
+    Indication&nbsp;&mdash; the cleartext <code>api.anthropic.com</code> in the
+    ClientHello&nbsp;&mdash; stays visible unless Encrypted Client Hello is used. Over the
+    connection the CLI speaks HTTP/2, framing and multiplexing the whole loop over one socket.
+    Each frame becomes IP packets crossing your ISP, the backbone, and the edge; every router
+    forwards on the destination address alone, decrementing the TTL, routes chosen by BGP. The
+    payload is opaque ciphertext, but the sizes and timing of the streamed frames still trace
+    the shape of the generation. Latency has a floor set by physics: about 200&nbsp;km per
+    millisecond in fiber. Because the request set <code>stream: true</code>, the reply is a
+    long-lived server-sent-event stream, unpacked in the final section. For now, the front
+    door.</p>
   </div>
 </section>

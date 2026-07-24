@@ -297,7 +297,13 @@ html.gate .level-status { display: none; }
   font-size: 0.95rem;
   color: var(--faint);
 }
-html[data-level] .level-status { display: block; }
+html[data-level] .level-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
 
 button.level-change {
   font: inherit;
@@ -310,13 +316,57 @@ button.level-change {
 }
 button.level-change:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-/* Tiered prose: each section wraps per-level prose in .lv blocks; figures
-   stay outside the wrappers and are shared by all tiers. */
+/* Length control in the status bar: a small segmented three-way switch. */
+.length-control { display: inline-flex; align-items: baseline; gap: 0.4rem; color: var(--faint); }
+button.len-btn {
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--blue-dark);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.12rem 0.62rem;
+  cursor: pointer;
+}
+button.len-btn:hover { background: var(--gray-soft); }
+button.len-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+html[data-length="short"]  .len-btn[data-length="short"],
+html[data-length="medium"] .len-btn[data-length="medium"],
+html[data-length="long"]   .len-btn[data-length="long"] {
+  background: var(--blue);
+  color: var(--bg);
+  border-color: var(--blue);
+}
+
+/* Tiered prose on two axes. Each prose slot provides per-audience wrappers
+   (lv-novice / lv-mid / lv-deep), and each audience is written at up to three
+   lengths (len-short / len-medium / len-long). A wrapper shows only when it
+   matches BOTH the chosen audience (html[data-level]) and the chosen length
+   (html[data-length]). The original text is the long version. */
 .lv { display: none; }
-html:not([data-level]):not(.gate) .lv-mid,
-html[data-level="mid"] .lv-mid,
-html[data-level="novice"] .lv-novice,
-html[data-level="deep"] .lv-deep { display: block; }
+.lv:empty { display: none !important; }
+
+html[data-level="novice"][data-length="short"]  .lv-novice.len-short,
+html[data-level="novice"][data-length="medium"] .lv-novice.len-medium,
+html[data-level="novice"][data-length="long"]   .lv-novice.len-long,
+html[data-level="mid"][data-length="short"]      .lv-mid.len-short,
+html[data-level="mid"][data-length="medium"]     .lv-mid.len-medium,
+html[data-level="mid"][data-length="long"]       .lv-mid.len-long,
+html[data-level="deep"][data-length="short"]     .lv-deep.len-short,
+html[data-level="deep"][data-length="medium"]    .lv-deep.len-medium,
+html[data-level="deep"][data-length="long"]      .lv-deep.len-long { display: block; }
+
+/* Length unresolved (no JS, or attribute missing) falls back to long, and
+   audience unresolved falls back to Practitioner — the pre-length default. */
+html:not([data-length])[data-level="novice"] .lv-novice.len-long,
+html:not([data-length])[data-level="mid"]    .lv-mid.len-long,
+html:not([data-length])[data-level="deep"]   .lv-deep.len-long,
+html:not([data-length]):not([data-level]):not(.gate) .lv-mid.len-long { display: block; }
+
+/* Figures follow length: none at short (text-only), a curated subset marked
+   .figlen-medium at medium, all at long (the default when length is unset). */
+html[data-length="short"] .figure { display: none; }
+html[data-length="medium"] .figure:not(.figlen-medium) { display: none; }
 
 /* .lv children need the same measure as direct section children. */
 article > section > .lv > * {
@@ -590,6 +640,6 @@ footer.end {
   html.gate nav.toc,
   html.gate article > section,
   html.gate footer.end { display: revert; }
-  html.gate:not([data-level]) .lv-mid { display: block; }
+  html.gate:not([data-level]) .lv-mid.len-long { display: block; }
   .figure { break-inside: avoid; page-break-inside: avoid; }
 }

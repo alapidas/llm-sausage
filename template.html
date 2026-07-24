@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eS+iKHdn9iz20tV6ZNkma5nkExfCx6irGCzwLIIkHyo=' 'sha256-jcy5mVql3vzTbjU58Z2hdvD7cV1D/n1JgoWYEmILJ0M=' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eS+iKHdn9iz20tV6ZNkma5nkExfCx6irGCzwLIIkHyo=' 'sha256-5WEXvY3wnRAdkKQZWmjPa38PXC6PG3GLYA5qdw1s/jM=' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; form-action 'none'; base-uri 'none'">
 <title>How the Sausage Gets Made — Inside a Claude Code Session</title>
 <meta name="description" content="An interactive explainer of everything that happens when you talk to Claude Code — from your terminal, across the wire, into a datacenter, and through a neural network, one token at a time.">
 <meta name="google-site-verification" content="McavMBsgOOjcxfS5MPDi8FYISNo1kBuMFVGN3m3-99Q" />
@@ -24,7 +24,7 @@
 <meta name="twitter:description" content="An interactive explainer of everything that happens when you talk to Claude Code — from your terminal, across the wire, into a datacenter, and through a neural network, one token at a time.">
 <meta name="twitter:image" content="https://alapidas.github.io/llm-sausage/og.png">
 <link rel="stylesheet" href="css/style.css">
-<script>(function(){var d=document.documentElement;var l=null,t=null;try{l=localStorage.getItem('sausage-level');t=localStorage.getItem('sausage-theme')}catch(e){}if(l==='novice'||l==='mid'||l==='deep'){d.setAttribute('data-level',l)}else{d.classList.add('gate')}if(t==='dark'||t==='light'){d.setAttribute('data-theme',t)}})();</script>
+<script>(function(){var d=document.documentElement;var l=null,t=null,n=null;try{l=localStorage.getItem('sausage-level');t=localStorage.getItem('sausage-theme');n=localStorage.getItem('sausage-length')}catch(e){}if(l==='novice'||l==='mid'||l==='deep'){d.setAttribute('data-level',l)}else{d.classList.add('gate')}if(t==='dark'||t==='light'){d.setAttribute('data-theme',t)}d.setAttribute('data-length',(n==='short'||n==='medium'||n==='long')?n:'long')})();</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129386;</text></svg>">
 <link rel="icon" type="image/png" href="favicon.png">
 <script type="application/ld+json">
@@ -72,7 +72,14 @@
   </div>
 </div>
 
-<p class="level-status" id="level-status">Reading as: <strong id="level-status-name"></strong> · <button type="button" class="level-change" id="level-change">change</button></p>
+<div class="level-status" id="level-status">
+  <span>Reading as: <strong id="level-status-name"></strong> · <button type="button" class="level-change" id="level-change">change</button></span>
+  <span class="length-control" role="group" aria-label="Length">Length:
+    <button type="button" class="len-btn" data-length="short">Short</button>
+    <button type="button" class="len-btn" data-length="medium">Medium</button>
+    <button type="button" class="len-btn" data-length="long">Long</button>
+  </span>
+</div>
 
 <nav class="toc" aria-label="Contents">
   <ol>

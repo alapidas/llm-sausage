@@ -461,6 +461,38 @@ window.Figures = (() => {
   document.addEventListener('DOMContentLoaded', init);
 })();
 
+/* ---------------- reading length ---------------- */
+/* The inline head script has already set html[data-length] (default 'long').
+   This wires the segmented Short / Medium / Long control and rebuilds figures,
+   whose visibility — and level-appropriate layout — depends on the length. */
+(() => {
+  function init() {
+    const html = document.documentElement;
+    const btns = document.querySelectorAll('.len-btn');
+    if (!btns.length) return;
+
+    function apply(length) {
+      if (length !== 'short' && length !== 'medium' && length !== 'long') return;
+      const prev = html.getAttribute('data-length');
+      html.setAttribute('data-length', length);
+      try { localStorage.setItem('sausage-length', length); } catch (e) { /* private mode etc. */ }
+      btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.length === length ? 'true' : 'false'));
+      /* Which figures are shown, and their level-aware layout, both depend on
+         length, so rebuild the figures on a real change. */
+      if (prev !== length && window.Figures && window.Figures.reinit) {
+        window.Figures.reinit();
+      }
+    }
+
+    btns.forEach(b => b.addEventListener('click', () => apply(b.dataset.length)));
+
+    const cur = html.getAttribute('data-length') || 'long';
+    btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.length === cur ? 'true' : 'false'));
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+
 /* ---------------- theme ---------------- */
 /* The inline head script has already set html[data-theme] from localStorage
    when the reader made an explicit choice; with no choice stored, the CSS

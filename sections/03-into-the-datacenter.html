@@ -1,11 +1,57 @@
 <section id="into-the-datacenter">
   <h2>Into the Datacenter</h2>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-short">
+    <p>Your message arrives at a building full of computers&nbsp;&mdash; picture a huge
+    restaurant kitchen. It stops first at a front desk, where a greeter checks you are a real
+    customer within your plan and the order makes sense; bad orders are turned away, the rest go
+    to a free cook. But no single cook can handle the whole thing: the model that writes
+    Claude&rsquo;s replies is too big to fit in one place, so it is spread across several chips
+    working in step. And the kitchen never cooks for one guest&nbsp;&mdash; a hot oven bakes one
+    tray or a dozen for nearly the same effort&nbsp;&mdash; so it runs many strangers&rsquo;
+    orders through the same steps at once. Your order is read all at once (a pause), then written
+    one word at a time. Next, we look at how your words become numbers.</p>
+  </div>
+
+  <div class="lv lv-mid len-short">
+    <p>The encrypted packets arrive at edge servers that hold the private key and complete the
+    TLS handshake, so the request becomes readable JSON again. It meets an <em>API gateway</em>
+    that authenticates the key, checks rate limits, and validates the body, rejecting bad
+    requests in milliseconds without waking a GPU. Survivors reach a load balancer that picks one
+    <em>model server</em> from a fleet&nbsp;&mdash; and since each fleet holds a single
+    model&rsquo;s weights, Opus and Haiku requests part ways here. A frontier model&rsquo;s
+    weights run to hundreds of gigabytes, too much for one accelerator, so the model is
+    <em>sharded</em> across a group wired by fast interconnects. Because one generation step
+    barely occupies a chip, servers <em>batch</em> many requests through shared forward passes,
+    joining and leaving at single-token granularity. Within a request, <em>prefill</em> reads the
+    whole prompt at once (your time to first token) and <em>decode</em> writes tokens one at a
+    time; prompt caching skips re-reading a repeated prefix. Next: turning text into numbers.</p>
+  </div>
+
+  <div class="lv lv-deep len-short">
+    <p>Packets terminate at edge servers holding the certificate&rsquo;s private key, so
+    decryption happens here and nowhere earlier. An <em>API gateway</em> authenticates the key,
+    enforces rate and quota limits, and validates the JSON, rejecting bad requests with
+    <code>401</code>, <code>429</code>, or <code>400</code> without scheduling accelerator work.
+    Survivors reach a load balancer&nbsp;&mdash; typically a layer-4 stage hashing connections and
+    a layer-7 stage routing on model name&nbsp;&mdash; so Opus and Haiku land on different fleets,
+    each keeping one model&rsquo;s weights resident. Weights run to hundreds of gigabytes, so the
+    model is <em>sharded</em>: tensor parallelism splits each matrix (partials combined by an
+    all-reduce every layer, tolerable only over an NVLink-class interconnect), pipeline
+    parallelism splits by depth across nodes. Because a single decode step is
+    memory-bandwidth-bound and barely occupies the compute units, servers use <em>continuous
+    batching</em>, admitting and evicting requests at single-token granularity so no slot idles.
+    Within a request, <em>prefill</em> is a compute-bound pass over the whole prompt&nbsp;&mdash;
+    your time to first token&nbsp;&mdash; and <em>decode</em> streams the weights once per token,
+    at roughly <code>B/N</code> tokens per second. Prompt caching reuses a repeated prefix&rsquo;s
+    state. Next: text into numbers.</p>
+  </div>
+
+  <div class="lv lv-novice len-long">
     <p>Your message has crossed the internet into a building full of computers — picture a huge restaurant kitchen. Your order stops first at a front desk, where a greeter checks you are a real customer within your plan and the order makes sense. Bad orders are turned away; the rest go to a free cook. Below, yours is the orange dot, and the scene runs itself.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>We left your request as encrypted packets bound for <code>api.anthropic.com</code>. They arrive at edge servers that hold the private key and complete the TLS handshake, so the encryption is peeled away here — on infrastructure operated by or for Anthropic — and becomes readable JSON again.</p>
 
     <p>It then meets an <em>API gateway</em>. Before any model sees a byte, the gateway authenticates the <code>x-api-key</code> header, checks it against rate limits and quotas, and validates the JSON body — real model name, sane <code>max_tokens</code>, parseable messages. Failures are turned away here with a <code>401</code>, <code>429</code>, or <code>400</code> in milliseconds, without waking a GPU. Survivors go to a load balancer, which picks one <em>model server</em> from a large fleet; because each fleet holds a single model's weights, requests for Opus and Haiku part ways here.</p>
@@ -15,23 +61,23 @@
     <p>Below, that front door runs live: drag the slider to raise the incoming rate and watch survivors fan out across the fleet while the load bars respond. Yours is the orange dot.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>Arriving packets terminate at edge servers that hold the certificate's private key and complete the TLS handshake, so decryption happens here and nowhere earlier. The plaintext request passes an <em>API gateway</em> that authenticates the <code>x-api-key</code> header, enforces per-key rate and quota limits, and validates the JSON body, rejecting bad requests with a <code>401</code>, <code>429</code>, or <code>400</code> in milliseconds without scheduling accelerator work. Survivors reach a load balancer, where two layers usually stack. A layer-4 balancer works at the TCP level, hashing or round-robining connections without inspecting them — fast, but blind to what a request will cost. A layer-7 balancer terminates HTTP and routes on the model name, request size, or a session-affinity key; that last matters, because Opus and Haiku requests must land on entirely different fleets, each keeping one model's weights resident. Backends stay in rotation only while health checks pass: liveness probes confirm the process is up, readiness checks that the weights are loaded and the queue draining, so a server mid-startup or mid-crash is pulled from the pool. Below, each backend shows its queue depth and health; one marked <em>drain</em> has left rotation until its queue empties. Drag the slider to raise the arrival rate and watch the queues respond.</p>
   </div>
 
   <div class="figure" id="fig-loadbalancer"></div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-long">
     <p>One cook cannot handle your whole order — the thing doing the work is too big to fit in one place, like a library so vast its books fill many rooms. The part that writes Claude's replies is like that. Below, one kitchen station is opened up — really several chips, each holding one slice, all working in step.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <h3>A model too big for one chip</h3>
 
     <p>A frontier model is mostly one enormous block of numbers: its weights run to hundreds of gigabytes, more than any single GPU (or accelerator) can hold. So the model is <em>sharded</em>, sliced across a group of accelerators wired together by fast interconnects, and the whole group acts as one logical server. The diagram below unpacks that single "model server" box: it holds several chips, each with one slice, all working in concert on every token.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <h3>A model too big for one chip</h3>
 
     <p>A frontier model's weights run to hundreds of gigabytes, far beyond the tens of gigabytes of high-bandwidth memory on one accelerator, so the model is <em>sharded</em> across chips that act as one logical server, cut along two axes. <em>Tensor parallelism</em> splits individual weight matrices: each chip holds a vertical slice of every layer and computes its partial for each token, and the partials are combined by an <em>all-reduce</em> before the next layer. That all-reduce fires at essentially every layer, so it is tolerable only over a very fast interconnect — NVLink-class links within a node, not ordinary Ethernet. <em>Pipeline parallelism</em> instead splits by depth: each chip holds a block of consecutive layers and tokens flow down the pipeline. Its cross-chip traffic is far smaller — only activations at block boundaries — so it tolerates slower links and spans nodes, at the cost of a "bubble" of idle chips that in-flight micro-batches must hide. Real deployments combine the two. Anthropic's exact configuration is not public, but the constraint — all-reduce cost against interconnect bandwidth — is universal. Below, the box opens to several chips, each with one tensor-parallel slice; double arrows mark the all-reduce within a node, the single arrow the pipeline split across nodes.</p>
@@ -39,11 +85,11 @@
 
   <div class="figure" id="fig-sharding"></div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-long">
     <p>Here is a surprise: serving one person barely keeps a chip busy — a hot oven bakes one tray or a dozen for nearly the same effort. So the kitchen never cooks for one guest; it runs many strangers' orders through the same steps at once, and a finished order leaves while a new one takes its place. Below, each row is a seat and each bar an order; turn up the arrivals and watch the seats fill and the food climb.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>Those weights loaded once at startup and stay resident in accelerator memory: the model is too heavy to move, so your few kilobytes of request travel to the weights, flow through, and leave.</p>
 
     <h3>Sharing the assembly line</h3>
@@ -53,7 +99,7 @@
     <p>The refinement that makes this practical is <em>continuous batching</em>: requests join and leave at single-token granularity, so the moment one frees its slot another slides in mid-stream. The timeline below shows one server's batch — each row a slot, each column a forward pass, each bar a request: a bright prefill chunk, then one cell per token, yours in orange. Raise the arrival rate and watch occupancy and the combined token rate climb.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>Those weights load once at startup and stay resident — too heavy to move, so your kilobytes travel to them. Because a single generation step barely occupies the compute units — the cost is streaming the weights through them, and once streamed they serve one request or dozens for almost the same cost — servers <em>batch</em> many requests through shared forward passes.</p>
 
     <h3>Sharing the assembly line</h3>
@@ -61,13 +107,103 @@
     <p>The naive form, <em>static batching</em>, collects a fixed group and runs it until all finish — wasteful, since requests finish at different lengths and the batch stalls on its slowest member while freed slots idle. <em>Continuous batching</em> (also in-flight batching, from the Orca work) manages the batch at single-token granularity: after each forward pass the scheduler evicts any request that emitted its stop token and admits a waiting one, so a newcomer's prefill interleaves with others' decode and no slot idles. Below, each row is a slot, each column one forward pass, each bar a request — a bright prefill chunk, then one cell per token, yours in orange. Raise the arrival rate and watch occupancy climb; the readout compares this against static batching and reports the average wait.</p>
   </div>
 
-  <div class="figure" id="fig-batching"></div>
+  <div class="lv lv-novice len-medium">
+    <p>Your message has crossed the internet into a building full of computers&nbsp;&mdash;
+    picture a huge restaurant kitchen. Your order stops first at a front desk, where a greeter
+    checks you are a real customer within your plan and the order makes sense. Bad orders are
+    turned away; the rest go to a free cook.</p>
 
-  <div class="lv lv-novice">
+    <p>One cook cannot handle your whole order, though&nbsp;&mdash; the thing doing the work is
+    too big to fit in one place, like a library so vast its books fill many rooms. So it is
+    spread across several chips, each holding one slice, all working in step.</p>
+
+    <p>Here is a surprise: serving one person barely keeps a chip busy, the way a hot oven bakes
+    one tray or a dozen for nearly the same effort. So the kitchen never cooks for one guest; it
+    runs many strangers&rsquo; orders through the same steps at once, and a finished order leaves
+    while a new one takes its place. Below, each row is a seat and each bar an order; turn up the
+    arrivals and watch the seats fill and the food climb.</p>
+  </div>
+
+  <div class="lv lv-mid len-medium">
+    <p>We left your request as encrypted packets bound for <code>api.anthropic.com</code>. They
+    arrive at edge servers that hold the private key and complete the TLS handshake, so the
+    encryption is peeled away here&nbsp;&mdash; on infrastructure operated by or for
+    Anthropic&nbsp;&mdash; and becomes readable JSON again. It then meets an <em>API gateway</em>.
+    Before any model sees a byte, the gateway authenticates the <code>x-api-key</code> header,
+    checks it against rate limits and quotas, and validates the body, turning failures away with
+    a <code>401</code>, <code>429</code>, or <code>400</code> in milliseconds, without waking a
+    GPU. Survivors go to a load balancer, which picks one <em>model server</em> from a large
+    fleet; because each fleet holds a single model&rsquo;s weights, requests for Opus and Haiku
+    part ways here.</p>
+
+    <p class="note">The exact layout of Anthropic&rsquo;s production stack is not public;
+    everything here is how large-scale inference services are generally built.</p>
+
+    <p>A frontier model is mostly one enormous block of numbers: its weights run to hundreds of
+    gigabytes, more than any single accelerator can hold. So the model is <em>sharded</em>,
+    sliced across a group of accelerators wired together by fast interconnects that act as one
+    logical server. Those weights load once at startup and stay resident&nbsp;&mdash; too heavy
+    to move, so your few kilobytes of request travel to them.</p>
+
+    <p>One fact shapes how these servers run: an accelerator finishes one generation step so
+    fast that serving a single user leaves it idle almost all the time. The costly part is
+    streaming hundreds of gigabytes of weights through the compute units&nbsp;&mdash; and once
+    streamed, they apply to one request or to dozens for nearly the same cost. So servers
+    <em>batch</em>, riding many strangers&rsquo; requests through the same forward passes. The
+    refinement that makes this practical is <em>continuous batching</em>: requests join and leave
+    at single-token granularity, so the moment one frees its slot another slides in mid-stream.
+    The timeline below shows one server&rsquo;s batch&nbsp;&mdash; each row a slot, each column a
+    forward pass, each bar a request: a bright prefill chunk, then one cell per token, yours in
+    orange. Raise the arrival rate and watch occupancy and the combined token rate climb.</p>
+  </div>
+
+  <div class="lv lv-deep len-medium">
+    <p>Arriving packets terminate at edge servers that hold the certificate&rsquo;s private key
+    and complete the TLS handshake, so decryption happens here and nowhere earlier. The plaintext
+    request passes an <em>API gateway</em> that authenticates the <code>x-api-key</code> header,
+    enforces per-key rate and quota limits, and validates the JSON body, rejecting bad requests
+    with a <code>401</code>, <code>429</code>, or <code>400</code> in milliseconds without
+    scheduling accelerator work. Survivors reach a load balancer, where two layers usually stack:
+    a layer-4 balancer hashing or round-robining connections without inspecting them, and a
+    layer-7 balancer that terminates HTTP and routes on the model name or a session-affinity
+    key&nbsp;&mdash; the last matters, because Opus and Haiku requests must land on entirely
+    different fleets, each keeping one model&rsquo;s weights resident.</p>
+
+    <p class="note">The exact layout of Anthropic&rsquo;s production stack is not public; this is
+    the common shape of large-scale inference services, and the real system surely differs in
+    detail.</p>
+
+    <p>A frontier model&rsquo;s weights run to hundreds of gigabytes, far beyond the
+    high-bandwidth memory on one accelerator, so the model is <em>sharded</em> across chips that
+    act as one logical server, cut along two axes. <em>Tensor parallelism</em> splits individual
+    weight matrices: each chip computes a partial for every token, and the partials are combined
+    by an <em>all-reduce</em> before the next layer&nbsp;&mdash; fired at essentially every layer,
+    so tolerable only over an NVLink-class interconnect. <em>Pipeline parallelism</em> instead
+    splits by depth, each chip holding a block of consecutive layers; its cross-chip traffic is
+    far smaller, so it spans nodes, at the cost of a pipeline &ldquo;bubble.&rdquo; Real
+    deployments combine the two. Those weights load once at startup and stay resident&nbsp;&mdash;
+    too heavy to move, so your kilobytes travel to them.</p>
+
+    <p>Because a single generation step barely occupies the compute units&nbsp;&mdash; the cost
+    is streaming the weights through them, and once streamed they serve one request or dozens for
+    almost the same cost&nbsp;&mdash; servers <em>batch</em> many requests through shared forward
+    passes. The naive form, <em>static batching</em>, runs a fixed group until all finish and
+    stalls on its slowest member; <em>continuous batching</em> (in-flight batching, from the Orca
+    work) manages the batch at single-token granularity, evicting any request that emitted its
+    stop token after each pass and admitting a waiting one, so a newcomer&rsquo;s prefill
+    interleaves with others&rsquo; decode and no slot idles. Below, each row is a slot, each
+    column one forward pass, each bar a request&nbsp;&mdash; a bright prefill chunk, then one cell
+    per token, yours in orange. Raise the arrival rate and watch occupancy climb; the readout
+    compares this against static batching and reports the average wait.</p>
+  </div>
+
+  <div class="figure figlen-medium" id="fig-batching"></div>
+
+  <div class="lv lv-novice len-long">
     <p>Your order is handled in two steps that you have felt. First the cook reads your whole order at once — the longer it is, the longer this takes, the pause before any reply appears. Then the cook writes the answer one word at a time, at a steady pace a longer order does not slow. Below, which loops on its own, stretch the request and watch the opening pause grow while the writing speed holds.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>The readout shows why batching is universal: total output grows almost linearly with occupancy while each request still gets a token every pass — more useful work per pass without much slowing any user.</p>
 
     <h3>Prefill and decode</h3>
@@ -75,7 +211,7 @@
     <p>Within each request the work splits into two very different phases. <em>Prefill</em> pushes the entire prompt through the model in one massively parallel pass, since all its tokens are known at once; limited by raw arithmetic, its duration is your <em>time to first token</em>. Then <em>decode</em> generates tokens one at a time, each a full pass through every layer, limited not by arithmetic but by how fast the weights stream from memory. Below, replay both phases in slow motion and lengthen the prompt to see the first-token wait grow while the decode rate stays flat.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>The readout makes the payoff concrete: output grows almost linearly with occupancy while each request still gets a token every pass.</p>
 
     <h3>Prefill and decode</h3>
@@ -85,15 +221,63 @@
 
   <div class="figure" id="fig-prefill-decode"></div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-long">
     <p>One last trick: as you work with Claude, the start of each new message often repeats the last, so rather than re-read it the kitchen keeps its notes and reads only what is new. But we keep saying the cook reads your words, and that is not quite true — a computer handles only numbers. How your words become numbers is where we go next.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>Prefill is also where a well-known optimization lives. If the start of your prompt matches one processed moments ago — and in an agent loop it almost always does, since every turn resends the same system prompt, tool definitions, and transcript — the service reuses that prefix's computed state and skips re-prefilling it. This is <em>prompt caching</em>, a documented feature of Anthropic's API, and Claude Code marks its stable prefixes as cacheable for that reason. We keep saying the model processes "tokens," but your request is still UTF-8 text — turning it into numbers is our next stop.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>Prefill is also where prompt caching lives — unlike most of this section, a documented API feature. When a request's prefix matches one processed moments earlier, the server reuses that prefix's state and skips re-prefilling it; in an agent loop the system prompt, tool definitions, and prior transcript recur every turn, so Claude Code marks those prefixes as cacheable, turning a full re-read into a charge for only what is new. All of this assumed the model consumes "tokens," but your request is still UTF-8 text — turning those bytes into numbers is where we go next.</p>
+  </div>
+
+  <div class="lv lv-novice len-medium">
+    <p>Your order is handled in two steps you have felt. First the cook reads your whole order
+    at once&nbsp;&mdash; the longer it is, the longer this takes, the pause before any reply
+    appears. Then the cook writes the answer one word at a time, at a steady pace a longer order
+    does not slow. One last trick: as you work with Claude, the start of each new message often
+    repeats the last, so rather than re-read it the kitchen keeps its notes and reads only what
+    is new. But we keep saying the cook reads your words, and that is not quite true&nbsp;&mdash;
+    a computer handles only numbers. How your words become numbers is where we go next.</p>
+  </div>
+
+  <div class="lv lv-mid len-medium">
+    <p>Within each request the work splits into two very different phases. <em>Prefill</em>
+    pushes the entire prompt through the model in one massively parallel pass, since all its
+    tokens are known at once; limited by raw arithmetic, its duration is your <em>time to first
+    token</em>. Then <em>decode</em> generates tokens one at a time, each a full pass through
+    every layer, limited not by arithmetic but by how fast the weights stream from
+    memory&nbsp;&mdash; which is why a longer prompt lengthens the opening wait while the decode
+    rate stays roughly flat. Prefill is also where a well-known optimization lives: if the start
+    of your prompt matches one processed moments ago&nbsp;&mdash; and in an agent loop it almost
+    always does, since every turn resends the same system prompt, tool definitions, and
+    transcript&nbsp;&mdash; the service reuses that prefix&rsquo;s computed state and skips
+    re-prefilling it. This is <em>prompt caching</em>, a documented feature of the API, and
+    Claude Code marks its stable prefixes as cacheable for that reason. We keep saying the model
+    processes &ldquo;tokens,&rdquo; but your request is still UTF-8 text&nbsp;&mdash; turning it
+    into numbers is our next stop.</p>
+  </div>
+
+  <div class="lv lv-deep len-medium">
+    <p>Within a request the work divides into two phases of opposite character. <em>Prefill</em>
+    pushes all prompt tokens through the model in one pass; since every token is known, the layer
+    operations are large matrix-matrix multiplies with high arithmetic intensity, so prefill is
+    compute-bound, its cost scaling with prompt length&nbsp;&mdash; this is your <em>time to first
+    token</em>. <em>Decode</em> is the opposite: each new token needs a full pass through every
+    layer for one token alone, collapsing those multiplies into skinny matrix-vector products, so
+    the bottleneck becomes memory bandwidth&nbsp;&mdash; one token means streaming the entire
+    weight set out of high-bandwidth memory once. That gives a hard ceiling: weights of
+    <code>N</code> bytes over HBM delivering <code>B</code> bytes per second cannot exceed roughly
+    <code>B/N</code> tokens per second&nbsp;&mdash; 150 GB over an aggregate 5 TB/s tops out near
+    33 tokens per second per stream. Batching pays because that one weight-streaming serves the
+    whole batch at once. Prefill is also where prompt caching lives, a documented API feature:
+    when a request&rsquo;s prefix matches one processed moments earlier, the server reuses that
+    prefix&rsquo;s state and skips re-prefilling it; in an agent loop the system prompt, tool
+    definitions, and prior transcript recur every turn, so Claude Code marks those prefixes as
+    cacheable, turning a full re-read into a charge for only what is new. All of this assumed the
+    model consumes &ldquo;tokens,&rdquo; but your request is still UTF-8 text&nbsp;&mdash; turning
+    those bytes into numbers is where we go next.</p>
   </div>
 </section>

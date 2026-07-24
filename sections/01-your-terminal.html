@@ -1,7 +1,54 @@
 <section id="your-terminal">
   <h2>Your Terminal</h2>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-short">
+    <p>Claude Code lives in a <em>terminal</em>&nbsp;&mdash; a plain text window where
+    you type commands instead of clicking. Unlike an ordinary terminal, which waits for
+    Enter before showing your letters, it reacts to every keystroke, redrawing the screen
+    many times a second. When you press Enter, your sentence does not travel alone: the
+    model keeps no memory between messages, so each time it is handed the whole
+    story&nbsp;&mdash; standing instructions, the actions it may take, notes about your
+    project, and the conversation so far&nbsp;&mdash; with your sentence as the last line.
+    And because it can only read and write text, whenever it wants to open a file or run a
+    command it must ask the program, which does the work and hands back the result.
+    Everything the model knows lives on that one growing page. Next, that page leaves your
+    computer.</p>
+  </div>
+
+  <div class="lv lv-mid len-short">
+    <p>It starts with a sentence: you run <code>claude</code>, ask it to fix a failing test,
+    and an answer streams back. The interface is not the terminal&rsquo;s own prompt but a
+    program drawing text&nbsp;&mdash; it switches the terminal into <em>raw mode</em> so
+    every keystroke reaches it at once, then repaints with ANSI escape sequences on the same
+    channel your shell uses to print <code>ls</code>. Pressing Enter sends far more than your
+    sentence. The API is stateless, so the CLI rebuilds the whole context each call: a system
+    prompt, the tool schemas (<code>Bash</code>, <code>Read</code>, <code>Edit</code>&hellip;),
+    project memory, the entire conversation, and finally your message. The model cannot touch
+    your machine; when it wants a file it emits a <code>tool_use</code> request, the CLI runs
+    it and returns a <code>tool_result</code>, and the loop turns until the model answers in
+    prose. Everything it knows lives in that one document&nbsp;&mdash; the context is the
+    interface. Next, the document leaves your machine.</p>
+  </div>
+
+  <div class="lv lv-deep len-short">
+    <p>The window is a program that has seized the terminal: it clears <code>ICANON</code>
+    and <code>ECHO</code> in the <code>termios</code> struct and sets
+    <code>VMIN&nbsp;=&nbsp;1</code>, so <code>read()</code> returns on the first byte rather
+    than a whole line, and every keystroke&nbsp;&mdash; plain bytes, or CSI escapes like
+    <code>\x1b[A</code> for the up arrow&nbsp;&mdash; arrives at once. It repaints by writing
+    escape sequences back on the same descriptor. Pressing Enter serializes a full context,
+    because the Messages API is stateless and holds no session: a multi-thousand-word system
+    prompt, the tool schemas as JSON Schema objects, project memory, then the conversation as
+    alternating <code>user</code> and <code>assistant</code> turns where tool outcomes return
+    as <code>tool_result</code> blocks&nbsp;&mdash; your message appended last. History
+    dominates, every returned byte resent verbatim. The model is a pure text-to-text function;
+    the agent is the loop the CLI wraps around it, running while turns come back with stop
+    reason <code>tool_use</code> and halting on <code>end_turn</code>. The invariant is stark:
+    the context is not a view onto the state, it is the entire state. Next, the CLI serializes
+    and sends it.</p>
+  </div>
+
+  <div class="lv lv-novice len-long">
     <p>Most people meet a large language model in a chat app: a box you type into,
     answers in text. Claude Code lives somewhere less familiar&nbsp;&mdash; a
     <em>terminal</em>, a plain text-only window where you type commands instead of
@@ -16,7 +63,7 @@
     the boxes beneath count each key pressed and how often the screen is redrawn.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>It starts with a sentence. You run <code>claude</code>, ask it to fix the
     failing test, and press Enter; an answer streams back character by character. It
     feels like a chat window and is nothing like one: before that first character, your
@@ -43,7 +90,7 @@
     count of redraws.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>The window is not the terminal&rsquo;s prompt but a program that has seized
     control of it (npm-distributed for Node.js, or shipped with its own runtime). A Unix
     terminal&rsquo;s driver defaults to <em>canonical mode</em>, governed by a
@@ -78,7 +125,7 @@
 
   <div class="figure" id="fig-terminal"></div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-long">
     <p>Pressing Enter does not send your sentence alone. The model keeps no memory
     between messages, so each time it is handed the whole story anew&nbsp;&mdash;
     standing instructions, the actions it may take, notes about your project, and the
@@ -88,7 +135,7 @@
     bar, and an arrow points out your own message, tiny beside everything else.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <h3>What Enter actually sends</h3>
 
     <p>Your sentence goes at the very end of something much larger. The API is
@@ -109,7 +156,7 @@
     your new message stays.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>Your sentence rides at the end of a document the CLI rebuilds from nothing on
     every call: the Messages API is stateless, holding no session between requests. In
     order: a <em>system prompt</em> of several thousand words setting behavior and
@@ -132,9 +179,73 @@
     new message stays a thin sliver.</p>
   </div>
 
-  <div class="figure" id="fig-context-assembly"></div>
+  <div class="lv lv-novice len-medium">
+    <p>Claude Code lives in a <em>terminal</em>&nbsp;&mdash; a plain text window where you
+    type commands instead of clicking buttons. An ordinary terminal waits for you to press
+    Enter before it prints your letters; Claude Code turns that off, reacting the instant you
+    touch a key and redrawing the screen many times a second to show it.</p>
 
-  <div class="lv lv-novice">
+    <p>Pressing Enter does not send your sentence alone. The model keeps no memory between
+    messages, so each time it is handed the whole story anew&nbsp;&mdash; standing
+    instructions, the actions it may take, notes about your project, and the conversation so
+    far. Your sentence is the last line of a very long page. Below, drag the slider to grow
+    the conversation; each band is named beneath the bar, and an arrow points out your own
+    message, tiny beside everything else.</p>
+  </div>
+
+  <div class="lv lv-mid len-medium">
+    <p>It starts with a sentence. You run <code>claude</code>, ask it to fix the failing
+    test, and an answer streams back character by character. It feels like a chat window and
+    is nothing like one. The interface greeting you is not the terminal&rsquo;s prompt but a
+    program drawing a text-mode interface: it switches the terminal into <em>raw mode</em> so
+    every keystroke reaches the process immediately, then repaints by writing ANSI escape
+    sequences to standard output&nbsp;&mdash; all on the same channel your shell uses to print
+    <code>ls</code>.</p>
+
+    <p>Pressing Enter sends far more than your sentence. The API is stateless&nbsp;&mdash; the
+    model retains no memory between calls&nbsp;&mdash; so the CLI rebuilds the context from
+    scratch every time. First a large <em>system prompt</em> of several thousand words on
+    behavior and tool use. Then the <em>tool definitions</em>&nbsp;&mdash; <code>Bash</code>,
+    <code>Read</code>, <code>Edit</code>, <code>Grep</code>, and more, each a JSON schema. Then
+    project memory such as <code>CLAUDE.md</code>. Then the whole conversation so far. And
+    finally your new message. The figure below lays this out as one horizontal bar: the
+    model&rsquo;s <em>context window</em>, with room for 200,000 tokens. A token is a short
+    chunk of text, about three-quarters of an English word; we meet tokens properly later.
+    Drag the slider to extend the conversation and hover over or touch each segment to see
+    what it holds. Notice how fast the history grows, and how thin the green sliver of your
+    new message stays.</p>
+  </div>
+
+  <div class="lv lv-deep len-medium">
+    <p>The window is not the terminal&rsquo;s prompt but a program that has seized control of
+    it. A Unix terminal defaults to <em>canonical mode</em>, where the driver buffers bytes
+    until a newline and echoes each one; a text UI cannot wait for newlines, so the CLI
+    switches the descriptor to <em>raw mode</em>&nbsp;&mdash; clearing <code>ICANON</code> and
+    <code>ECHO</code>, setting <code>VMIN&nbsp;=&nbsp;1</code>, <code>VTIME&nbsp;=&nbsp;0</code>
+    so <code>read()</code> returns on the first available byte. Most keys arrive as the obvious
+    byte; the interesting ones do not&nbsp;&mdash; the up arrow sends <code>ESC</code>,
+    <code>[</code>, <code>A</code>, a CSI escape sequence the program parses. Output uses the
+    same alphabet in reverse, on the very channel your shell uses to print <code>ls</code>.</p>
+
+    <p>Pressing Enter serializes a document the CLI rebuilds from nothing on every call,
+    because the Messages API is stateless. In order: a <em>system prompt</em> of several
+    thousand words; the <em>tool schemas</em>&nbsp;&mdash; <code>Bash</code>, <code>Read</code>,
+    <code>Edit</code>, <code>Grep</code>&nbsp;&mdash; each a JSON Schema object the model reads
+    as documentation; project memory as text; then the conversation, messages alternating
+    <code>user</code> and <code>assistant</code> roles, where an assistant turn may carry
+    <code>tool_use</code> blocks whose outcomes return as <code>tool_result</code> blocks in the
+    next user turn. Your new message is appended last. History dominates: every turn resends
+    not just what was said but every byte the tools returned&nbsp;&mdash; whole files, command
+    output, search hits&nbsp;&mdash; verbatim. In the figure below, drag the slider to extend
+    the conversation and hover over or touch each segment to read its exact token count, a
+    rough byte estimate, and its position in the request; a toggle re-expresses the window in
+    kilobytes on the wire. The <em>context window</em> holds 200,000 tokens, and the history
+    swells while your new message stays a thin sliver.</p>
+  </div>
+
+  <div class="figure figlen-medium" id="fig-context-assembly"></div>
+
+  <div class="lv lv-novice len-long">
     <p>The pile also holds results from doing things: a file read, a command run. The
     model can only read and write text; it cannot touch your computer. So when it wants a
     file, it asks the program, which checks that this is allowed, runs it, and adds the
@@ -145,7 +256,7 @@
     answers.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p class="note">The segment sizes here are illustrative, not measured, and shift
     between versions; even so, system prompt and tool schemas together typically run to
     tens of thousands of tokens before you type anything.</p>
@@ -167,7 +278,7 @@
     your disk is the final section&rsquo;s story.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>Those tool results expose the architecture. The model is a pure text-to-text
     function: context in, tokens out&nbsp;&mdash; it cannot open a file or start a
     process. The agent is the loop the CLI wraps around it. When the model needs
@@ -192,14 +303,14 @@
 
   <div class="figure" id="fig-agent-loop"></div>
 
-  <div class="lv lv-novice">
+  <div class="lv lv-novice len-long">
     <p>Everything the model knows about your request lives in that one growing page of
     text. It cannot glance at your screen, wander your files, or remember yesterday; what
     is not on the page does not exist for it. Next we follow that page as it leaves your
     computer.</p>
   </div>
 
-  <div class="lv lv-mid">
+  <div class="lv lv-mid len-long">
     <p>Notice what this implies: everything the model will ever know about your request
     lives in that one growing document. It cannot peek at your screen, browse your
     filesystem, or recall yesterday. If a fact is not in the context, for the model it
@@ -210,7 +321,7 @@
     your machine.</p>
   </div>
 
-  <div class="lv lv-deep">
+  <div class="lv lv-deep len-long">
     <p>The invariant is stark: everything the model will ever know about your task lives
     in that single reconstructed document. There is no side channel&nbsp;&mdash; no
     background access to your screen, your filesystem, or yesterday&rsquo;s session. A
@@ -218,5 +329,45 @@
     a view onto the state; it is the entire state. With that document assembled, the CLI
     is ready
     to serialize and send it, where the next section begins.</p>
+  </div>
+
+  <div class="lv lv-novice len-medium">
+    <p>The page also holds results from doing things: a file read, a command run. The model
+    can only read and write text&nbsp;&mdash; it cannot touch your computer&nbsp;&mdash; so
+    when it wants a file it asks the program, which checks that this is allowed, runs it, and
+    adds the result to the story. A single request like &ldquo;fix the failing test&rdquo;
+    often takes several such rounds before the model stops asking and simply answers.
+    Everything it knows lives on that one page; what is not written there does not exist for
+    it. Next, the page leaves your computer.</p>
+  </div>
+
+  <div class="lv lv-mid len-medium">
+    <p>Where do those tool results come from? The model cannot open your files or run your
+    tests; it only receives and produces text. What makes Claude Code an <em>agent</em> is the
+    program wrapped around it. When the model wants <code>auth.spec.ts</code>, it replies not
+    with an answer but a <code>tool_use</code> request; the CLI checks it against your
+    permission settings, runs the tool locally, packages the output into a
+    <code>tool_result</code> message, and sends the whole context back. Seeing the file, it may
+    ask to run the test suite, and the cycle repeats&nbsp;&mdash; a single &ldquo;fix the
+    failing test&rdquo; routinely fans out into half a dozen API calls before the model answers
+    with prose. Everything it will ever know about your request lives in that one growing
+    document; it cannot peek at your screen or recall yesterday. The context is the interface.
+    Next, the CLI serializes it into JSON and sends it out of your machine.</p>
+  </div>
+
+  <div class="lv lv-deep len-medium">
+    <p>Those tool results expose the architecture. The model is a pure text-to-text function:
+    context in, tokens out&nbsp;&mdash; it cannot open a file or start a process. The agent is
+    the loop the CLI wraps around it. When the model needs <code>auth.spec.ts</code>, it does
+    not answer; it emits an assistant turn carrying a <code>tool_use</code> block and a stop
+    reason of <code>tool_use</code>. The CLI checks the call against your permission
+    configuration, runs the tool locally, wraps the output in a <code>tool_result</code> block,
+    and issues a fresh request with the enlarged context. The loop continues while turns come
+    back with stop reason <code>tool_use</code> and halts on an <code>end_turn</code>&nbsp;&mdash;
+    ordinary prose with no tool call&nbsp;&mdash; handed back as the answer; a single &ldquo;fix
+    the failing test&rdquo; fans out into half a dozen requests before the model settles on
+    prose. The invariant is stark: everything the model will ever know about your task lives in
+    that single reconstructed document. There is no side channel. The context is not a view onto
+    the state; it is the entire state. Next, the CLI serializes and sends it.</p>
   </div>
 </section>
