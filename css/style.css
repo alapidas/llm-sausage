@@ -1,60 +1,41 @@
 /* ===================================================================
    llm-sausage — design system
-   The article as a printed feature: a serif text face on warm paper,
-   roman chapter numerals, drop caps, and figures numbered the way a
-   journal numbers its plates. No webfonts — the serif stack is
-   whatever the reader's system already has.
+   Ciechanowski-inspired: quiet typography, generous whitespace,
+   figures that do the talking.
    =================================================================== */
 
 /* Light is the default; the dark values live in the two blocks below and
    must stay in sync with PAL_DARK in js/main.js. */
 :root {
   color-scheme: light;
-  --surface: #fffdf8;      /* raised elements: cards, buttons, slider thumbs */
-  --ink: #3a352d;
-  --ink-strong: #1f1b15;
-  --faint: #7a7264;
-  --grid: #e5ddcf;
-  --bg: #fdfaf4;
-  /* Pigments rather than screen colors: steel, terracotta, olive. */
-  --blue: #3f7099;
-  --blue-dark: #2b5273;
-  --orange: #c0653a;
-  --orange-dark: #96461f;
-  --green: #6b8f5a;
-  --green-dark: #4e6b40;
-  --red: #b04a3f;
-  --red-dark: #8c342b;
-  --purple: #77618f;
-  --yellow: #c0912e;
-  --teal: #3f9a92;
-  --blue-soft: #e2ecf3;
-  --orange-soft: #f7e6d8;
-  --green-soft: #e8eddd;
-  --red-soft: #f6e2dc;
-  --purple-soft: #ece5f0;
-  --gray-soft: #f3ede1;
-  --code-bg: #f3ede1;
-  --border: #d8cfbe;      /* control/button borders */
-  --border-dark: #c3b8a3; /* slider thumb border */
-  --measure: 38rem;      /* prose column */
+  --surface: #ffffff;      /* raised elements: cards, buttons, slider thumbs */
+  --ink: #3d4148;
+  --ink-strong: #24272c;
+  --faint: #6b727a;
+  --grid: #e3e6ea;
+  --bg: #ffffff;
+  --blue: #4a90d9;
+  --blue-dark: #2f6bb0;
+  --orange: #e8833a;
+  --orange-dark: #b25e15;
+  --green: #55a868;
+  --green-dark: #3f7d51;
+  --red: #d1605e;
+  --red-dark: #b23b39;
+  --purple: #8172b3;
+  --yellow: #e0b13e;
+  --teal: #4db6ac;
+  --blue-soft: #dcecfa;
+  --orange-soft: #fbe8d8;
+  --green-soft: #def0e2;
+  --red-soft: #f8e0df;
+  --purple-soft: #e8e3f3;
+  --gray-soft: #f2f3f5;
+  --code-bg: #f4f5f7;
+  --border: #c9cdd3;      /* control/button borders */
+  --border-dark: #b9bfc6; /* slider thumb border */
+  --measure: 43rem;      /* prose column */
   --measure-wide: 52rem; /* figure column */
-
-  /* Body text face. Every entry is a system font; nothing is fetched. */
-  --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype",
-           Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
-
-  /* Terminal/screen slab inside figures. Stays dark in BOTH themes — a
-     terminal is dark even on a dark page — so accents drawn on it keep
-     their contrast. Read by js/main.js into PAL.panel/panelInk/panelEdge. */
-  --panel: #201c16;
-  --panel-ink: #f3ede1;
-  --panel-edge: #201c16;
-
-  /* Typefaces figures draw with. Read by js/main.js into PAL.sans/PAL.mono.
-     Figures stay sans: they are apparatus beside the text, not part of it. */
-  --fig-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --fig-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 /* Dark theme. The variables are declared once and switched on by either
@@ -63,69 +44,63 @@
    Keep these values in sync with PAL_DARK in js/main.js. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --surface: #201c16;
-  --ink: #d3cabb;
-  --ink-strong: #f4eee2;
-  --faint: #988e7f;
-  --grid: #2f2920;
-  --bg: #16130f;
-  --blue: #74a5cc;
-  --blue-dark: #a3c8e4;
-  --orange: #dd9061;
-  --orange-dark: #edb389;
-  --green: #93b881;
-  --green-dark: #b4d0a4;
-  --red: #d4837a;
-  --red-dark: #e6a79f;
-  --purple: #a893bd;
-  --yellow: #d5b258;
-  --teal: #63bcb3;
-  --blue-soft: #1b2833;
-  --orange-soft: #322418;
-  --green-soft: #232b1d;
-  --red-soft: #33221e;
-  --purple-soft: #29222f;
-  --gray-soft: #221e17;
-  --code-bg: #221e17;
-  --border: #3b342a;
-  --border-dark: #4d4436;
-  --panel: #100e0b;
-  --panel-ink: #f4eee2;
-  --panel-edge: #3b342a;
+  --surface: #202429;
+  --ink: #c3c9d1;
+  --ink-strong: #e9edf2;
+  --faint: #8d959f;
+  --grid: #2f343b;
+  --bg: #181b1f;
+  --blue: #6aa9e8;
+  --blue-dark: #9ecbf5;
+  --orange: #efa066;
+  --orange-dark: #f5c091;
+  --green: #6fbf85;
+  --green-dark: #98d5a9;
+  --red: #e08381;
+  --red-dark: #eda3a2;
+  --purple: #a598d1;
+  --yellow: #e5c163;
+  --teal: #5ec8be;
+  --blue-soft: #1d2f42;
+  --orange-soft: #382a1d;
+  --green-soft: #1e3326;
+  --red-soft: #392426;
+  --purple-soft: #2b2740;
+  --gray-soft: #23272d;
+  --code-bg: #23272d;
+  --border: #3a4048;
+  --border-dark: #4a515a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --surface: #201c16;
-    --ink: #d3cabb;
-    --ink-strong: #f4eee2;
-    --faint: #988e7f;
-    --grid: #2f2920;
-    --bg: #16130f;
-    --blue: #74a5cc;
-    --blue-dark: #a3c8e4;
-    --orange: #dd9061;
-    --orange-dark: #edb389;
-    --green: #93b881;
-    --green-dark: #b4d0a4;
-    --red: #d4837a;
-    --red-dark: #e6a79f;
-    --purple: #a893bd;
-    --yellow: #d5b258;
-    --teal: #63bcb3;
-    --blue-soft: #1b2833;
-    --orange-soft: #322418;
-    --green-soft: #232b1d;
-    --red-soft: #33221e;
-    --purple-soft: #29222f;
-    --gray-soft: #221e17;
-    --code-bg: #221e17;
-    --border: #3b342a;
-    --border-dark: #4d4436;
-    --panel: #100e0b;
-    --panel-ink: #f4eee2;
-    --panel-edge: #3b342a;
+    --surface: #202429;
+    --ink: #c3c9d1;
+    --ink-strong: #e9edf2;
+    --faint: #8d959f;
+    --grid: #2f343b;
+    --bg: #181b1f;
+    --blue: #6aa9e8;
+    --blue-dark: #9ecbf5;
+    --orange: #efa066;
+    --orange-dark: #f5c091;
+    --green: #6fbf85;
+    --green-dark: #98d5a9;
+    --red: #e08381;
+    --red-dark: #eda3a2;
+    --purple: #a598d1;
+    --yellow: #e5c163;
+    --teal: #5ec8be;
+    --blue-soft: #1d2f42;
+    --orange-soft: #382a1d;
+    --green-soft: #1e3326;
+    --red-soft: #392426;
+    --purple-soft: #2b2740;
+    --gray-soft: #23272d;
+    --code-bg: #23272d;
+    --border: #3a4048;
+    --border-dark: #4a515a;
   }
 }
 
@@ -143,9 +118,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--serif);
-  font-size: 1.2rem;
-  line-height: 1.68;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.72;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -164,46 +140,35 @@ article > footer > * {
   margin-right: auto;
 }
 
-article p { margin: 0 auto 1.35rem; }
-article ul, article ol { margin: 0 auto 1.4rem; }
+article p, article ul, article ol { margin: 0 auto 1.4rem; }
 
-/* Chapters and plates are numbered; see h2::before and .fig-caption::before. */
-article { counter-reset: chapter figure; }
+section { margin: 0 auto; }
 
-section { margin: 0 auto; counter-increment: chapter; }
-
-/* ---------------- masthead ---------------- */
+/* ---------------- header ---------------- */
 
 header.hero {
-  padding: 6rem 0 1rem;
+  padding: 5.5rem 0 1.5rem;
   text-align: left;
-  border-bottom: 1px solid var(--grid);
-  margin-bottom: 0.5rem;
 }
 
 header.hero h1 {
-  font-size: 3.5rem;
-  line-height: 1.04;
+  font-size: 2.6rem;
+  line-height: 1.15;
   font-weight: 700;
-  letter-spacing: -0.018em;
+  letter-spacing: -0.02em;
   color: var(--ink-strong);
-  margin: 0 auto 1.2rem;
+  margin: 0 auto 1rem;
 }
 
 header.hero .subtitle {
-  font-style: italic;
-  font-size: 1.32rem;
-  line-height: 1.5;
-  color: var(--ink);
-  margin: 0 auto 1.4rem;
+  font-size: 1.2rem;
+  color: var(--faint);
+  margin: 0 auto 0.5rem;
 }
 
 header.hero .byline {
-  font-size: 0.82rem;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.11em;
+  font-size: 0.95rem;
   color: var(--faint);
-  padding-bottom: 1.4rem;
 }
 
 header.hero .byline a {
@@ -264,37 +229,25 @@ button.theme-toggle .ico-sun { display: none; }
 }
 
 nav.toc {
-  margin: 2rem auto 3rem;
+  margin: 2.5rem auto 3rem;
   max-width: var(--measure);
+  border-top: 1px solid var(--grid);
   border-bottom: 1px solid var(--grid);
-  padding: 0 0 1rem;
+  padding: 1rem 0;
 }
 
 nav.toc ol {
   margin: 0; padding: 0;
   list-style: none;
-  counter-reset: toc;
-  column-count: 2;
-  column-gap: 2.5rem;
-}
-
-nav.toc li {
-  counter-increment: toc;
-  break-inside: avoid;
-  padding: 0.12rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.4rem;
 }
 
 nav.toc a {
   color: var(--blue-dark);
   text-decoration: none;
-  font-size: 1rem;
-}
-
-nav.toc a::before {
-  content: counter(toc, upper-roman) ". ";
-  color: var(--faint);
-  font-size: 0.78em;
-  letter-spacing: 0.08em;
+  font-size: 0.98rem;
 }
 
 nav.toc a:hover { text-decoration: underline; }
@@ -313,7 +266,7 @@ html.gate article > section,
 html.gate footer.end,
 html.gate .level-status { display: none; }
 
-.level-gate-lead { color: var(--faint); font-style: italic; }
+.level-gate-lead { color: var(--faint); }
 
 .level-cards { display: flex; gap: 0.8rem; }
 
@@ -324,7 +277,7 @@ html.gate .level-status { display: none; }
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: 10px;
   padding: 1rem 1.1rem;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(0,0,0,0.06);
@@ -334,7 +287,7 @@ html.gate .level-status { display: none; }
 .level-card:active { background: var(--grid); }
 .level-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-.level-card strong { display: block; color: var(--ink-strong); font-weight: 700; margin-bottom: 0.3rem; }
+.level-card strong { display: block; color: var(--ink-strong); margin-bottom: 0.3rem; }
 .level-card span { font-size: 0.9rem; color: var(--faint); line-height: 1.5; }
 
 .level-status {
@@ -342,7 +295,6 @@ html.gate .level-status { display: none; }
   max-width: var(--measure);
   margin: 2.5rem auto 0;
   font-size: 0.95rem;
-  font-style: italic;
   color: var(--faint);
 }
 html[data-level] .level-status { display: block; }
@@ -376,43 +328,19 @@ article > section > .lv > * {
 /* ---------------- prose ---------------- */
 
 h2 {
-  font-size: 2.3rem;
+  font-size: 1.9rem;
   font-weight: 700;
-  letter-spacing: -0.014em;
+  letter-spacing: -0.015em;
   color: var(--ink-strong);
-  margin: 5.5rem auto 1.6rem;
-  line-height: 1.14;
-}
-
-/* A roman numeral sits over the title, the way a chapter opens in print. */
-h2::before {
-  content: counter(chapter, upper-roman);
-  display: block;
-  margin-bottom: 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 400;
-  letter-spacing: 0.24em;
-  color: var(--orange-dark);
+  margin: 4.5rem auto 1.4rem;
+  line-height: 1.2;
 }
 
 h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  font-style: italic;
-  letter-spacing: 0;
+  font-size: 1.3rem;
+  font-weight: 650;
   color: var(--ink-strong);
   margin: 2.8rem auto 1rem;
-}
-
-/* Drop cap opening each chapter. Only one reading tier is ever displayed,
-   so exactly one drop cap renders per chapter. */
-article > section > .lv > p:first-child::first-letter {
-  float: left;
-  font-size: 3.4em;
-  line-height: 0.78;
-  padding: 0.06em 0.07em 0 0;
-  color: var(--ink-strong);
-  font-weight: 700;
 }
 
 a { color: var(--blue-dark); }
@@ -421,7 +349,7 @@ strong { color: var(--ink-strong); }
 
 code {
   font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  font-size: 0.8em;
+  font-size: 0.86em;
   background: var(--code-bg);
   border-radius: 4px;
   padding: 0.12em 0.35em;
@@ -433,7 +361,7 @@ pre {
   border-radius: 8px;
   padding: 1rem 1.2rem;
   overflow-x: auto;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   line-height: 1.55;
   max-width: var(--measure);
   margin: 0 auto 1.4rem;
@@ -442,22 +370,19 @@ pre {
 pre code { background: none; padding: 0; font-size: 1em; }
 
 .note {
-  font-style: italic;
-  border-left: 1px solid var(--border);
-  padding-left: 1.3rem;
+  border-left: 3px solid var(--grid);
+  padding-left: 1.1rem;
   color: var(--faint);
-  font-size: 1rem;
-  line-height: 1.6;
-  margin: 2rem auto;
+  font-size: 0.98rem;
+  margin: 1.6rem auto;
 }
 
-/* ---------------- plates ---------------- */
+/* ---------------- figures ---------------- */
 
 .figure {
   max-width: var(--measure-wide);
-  margin: 3.2rem auto 3.4rem;
+  margin: 2.4rem auto 2.6rem;
   position: relative;
-  counter-increment: figure;
 }
 
 /* Reserve height before canvas/controls/caption inject, to avoid layout shift. */
@@ -468,8 +393,7 @@ pre code { background: none; padding: 0; font-size: 1em; }
 .figure canvas {
   display: block;
   width: 100%;
-  border-radius: 2px;
-  border: 1px solid var(--grid);
+  border-radius: 10px;
   /* pan-y keeps vertical page scrolling working over tall canvases;
      figure interactions are taps and DOM sliders, not vertical drags. */
   touch-action: pan-y;
@@ -478,32 +402,17 @@ pre code { background: none; padding: 0; font-size: 1em; }
 }
 
 .fig-caption {
-  max-width: 34rem;
-  margin: 0.9rem auto 0;
+  max-width: var(--measure);
+  margin: 0.7rem auto 0;
   text-align: center;
   color: var(--faint);
-  font-size: 0.95rem;
-  font-style: italic;
+  font-size: 0.9rem;
   line-height: 1.5;
   user-select: text;
   -webkit-user-select: text;
 }
 
-.fig-caption::before {
-  content: "Fig. " counter(figure) " — ";
-  font-style: normal;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.1em;
-  color: var(--ink-strong);
-}
-
-/* ---------------- controls ----------------
-   Apparatus, not text: set in sans so they read as instruments beside
-   the plate rather than as part of the article. */
-
-.controls, .fig-btn, .fig-toggle, .control-label, .control-value {
-  font-family: var(--fig-sans);
-}
+/* ---------------- controls ---------------- */
 
 .controls {
   display: flex;
@@ -636,19 +545,16 @@ footer.end {
   padding-top: 2rem;
   border-top: 1px solid var(--grid);
   color: var(--faint);
-  font-size: 1rem;
-  font-style: italic;
+  font-size: 0.95rem;
 }
 
 /* ---------------- small screens ---------------- */
 
 @media (max-width: 640px) {
-  body { font-size: 1.08rem; }
-  header.hero { padding-top: 3.5rem; }
-  header.hero h1 { font-size: 2.2rem; }
-  header.hero .subtitle { font-size: 1.12rem; }
-  h2 { font-size: 1.7rem; margin-top: 3.6rem; }
-  nav.toc ol { column-count: 1; }
+  body { font-size: 1.02rem; }
+  header.hero { padding-top: 3rem; }
+  header.hero h1 { font-size: 1.9rem; }
+  h2 { font-size: 1.5rem; margin-top: 3.2rem; }
   .level-cards { flex-direction: column; }
 }
 
@@ -665,17 +571,14 @@ footer.end {
      the figures to the light palette on beforeprint to match. */
   :root, :root[data-theme="dark"] {
     color-scheme: light;
-    --surface: #fffdf8;
-    --ink: #3a352d;
-    --ink-strong: #1f1b15;
-    --faint: #7a7264;
-    --grid: #e5ddcf;
-    --bg: #fdfaf4;
-    --code-bg: #f3ede1;
-    --border: #d8cfbe;
-    --panel: #201c16;
-    --panel-ink: #f3ede1;
-    --panel-edge: #201c16;
+    --surface: #ffffff;
+    --ink: #3d4148;
+    --ink-strong: #24272c;
+    --faint: #6b727a;
+    --grid: #e3e6ea;
+    --bg: #ffffff;
+    --code-bg: #f4f5f7;
+    --border: #c9cdd3;
   }
 
   .controls,

@@ -54,22 +54,3 @@ no diff.
 Figures register themselves via `Figures.register(id, setup)` and are
 started/stopped by an `IntersectionObserver`, so off-screen animations
 cost nothing.
-
-## Design
-
-The page is set as a printed feature: a serif text face on warm paper, roman
-chapter numerals, a drop cap opening each chapter, and figures numbered as
-plates (`Fig. 4 — …`). Controls stay in a sans face so they read as apparatus
-beside a plate rather than as part of the article. Nothing is fetched — the
-serif stack in `--serif` is whatever system font the reader already has.
-
-Color lives in exactly one place. `css/style.css` declares every hue as a
-custom property, and `js/main.js` reads those properties into `PAL` at draw
-time, so the canvases follow the stylesheet automatically and a color only
-ever needs changing once. The `PAL_LIGHT` / `PAL_DARK` objects in `main.js`
-are fallbacks for the case where a property is missing, and should be kept in
-sync when the palette changes.
-
-Both themes are complete: light is the default, dark follows the system until
-the reader clicks the toggle in the byline, and printing forces the light
-palette (`js/main.js` repaints the canvases to match on `beforeprint`).
